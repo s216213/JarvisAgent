@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![doc = include_str!("../README.md")]
+#![doc = "Branch hinting. Vendored so this crate builds on the current nightly and in Docker."]
 #![warn(missing_docs, missing_debug_implementations)]
 #![cfg_attr(branches_nightly, feature(core_intrinsics))]
 #![cfg_attr(branches_nightly, allow(internal_features))]

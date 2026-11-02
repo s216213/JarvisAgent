@@ -5,3 +5,4 @@ apps/web/dist
 data
 **/*.md
 !design/tokens.md
+!vendor/**/*.md
