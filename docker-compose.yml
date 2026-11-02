@@ -20,6 +20,8 @@ services:
 
   caddy:
     image: caddy:2
+    environment:
+      JARVIS_DOMAIN: ${JARVIS_DOMAIN:-localhost}
     ports:
       - "443:443"
       - "80:80"

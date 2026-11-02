@@ -37,7 +37,7 @@ GEMINI_API_KEY=
 OPENROUTER_API_KEY=
 ```
 
-`JARVIS_DOMAIN` to nazwa, na którą Caddy wystawi HTTPS dla API i WebSocket. `JARVIS_WEB_ORIGIN` to dokładny adres produkcji z Vercel, razem z `https://` i bez ukośnika na końcu. `JARVIS_COOKIE_SECURE=1` jest wymagane, bo strona i API są na różnych hostach. Hasło web nie zostawiaj puste: bez tej zmiennej rdzeń przyjmuje hasło `jarvis`.
+`JARVIS_DOMAIN` to nazwa, na którą Caddy wystawi HTTPS dla API i WebSocket. Ta zmienna musi wejść do kontenera Caddy. W `.env` ma być sama nazwa, bez `https://`, na przykład `gawr-jarvis.duckdns.org`. Rekord A w DuckDNS wskazuje publiczny adres VM. Porty 80 i 443 są otwarte w liście zabezpieczeń VCN i w zaporze samej VM. Bez portu 80 Caddy nie dostanie certyfikatu Let's Encrypt, a `curl` kończy się błędem TLS `internal error`. `JARVIS_WEB_ORIGIN` to dokładny adres produkcji z Vercel, razem z `https://` i bez ukośnika na końcu. `JARVIS_COOKIE_SECURE=1` jest wymagane, bo strona i API są na różnych hostach. Hasło web nie zostawiaj puste: bez tej zmiennej rdzeń przyjmuje hasło `jarvis`.
 
 Klucze Groq, Gemini i OpenRouter są opcjonalne w tym pliku. Da się je też wpisać później w `/admin`. Sync Turso zostaje wyłączony, dopóki w panelu nie włączysz flagi `turso_sync` i nie podasz `TURSO_DATABASE_URL` oraz tokenu.
 
