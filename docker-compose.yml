@@ -1,0 +1,53 @@
+services:
+  core:
+    platform: linux/arm64
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    environment:
+      PORT: "8080"
+      JARVIS_DATA: /data
+      JARVIS_VAULT: /data/vault
+      JARVIS_DOCKER: "1"
+      SEARXNG_URL: http://searxng:8080
+      JARVIS_DEPLOY: /app
+      JARVIS_WEB_ORIGIN: ${JARVIS_WEB_ORIGIN:-http://localhost:5173}
+      JARVIS_COOKIE_SECURE: ${JARVIS_COOKIE_SECURE:-0}
+    volumes:
+      - jarvis-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - core
+    restart: unless-stopped
+
+  searxng:
+    image: searxng/searxng:latest
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+    volumes:
+      - ./deploy/searxng:/etc/searxng:rw
+    restart: unless-stopped
+
+  webtop:
+    profiles: ["desktop"]
+    image: lscr.io/linuxserver/webtop:debian-xfce
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Europe/Warsaw
+    ports:
+      - "127.0.0.1:6080:3000"
+
+volumes:
+  jarvis-data:
+  caddy-data:

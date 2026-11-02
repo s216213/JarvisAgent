@@ -6,17 +6,23 @@ Kolejność: najpierw VM, potem Vercel, na końcu sparowanie Windowsa i telefonu
 
 ## OCI
 
-Maszyna to Always Free Ampere A1, ARM64. Obraz w `deploy/docker-compose.yml` jest ustawiony na `linux/arm64`. Porty 80 i 443 mają być otwarte w liście zabezpieczeń VCN. Port 8080 zostaje wewnątrz sieci Dockera.
+Maszyna to Always Free Ampere A1, ARM64. Obraz w `docker-compose.yml` w katalogu głównym jest ustawiony na `linux/arm64`. Porty 80 i 443 mają być otwarte w liście zabezpieczeń VCN. Port 8080 zostaje wewnątrz sieci Dockera.
 
 Na VM:
 
 ```bash
 sudo apt update
-sudo apt install -y docker.io docker-compose-v2
+sudo apt install -y docker.io docker-compose-v2 git
 sudo usermod -aG docker "$USER"
 ```
 
-Wyloguj się i zaloguj ponownie, sklonuj repozytorium i wejdź do `deploy`.
+Wyloguj się i zaloguj ponownie, sklonuj repozytorium i wejdź do jego katalogu głównego. Tam musi leżeć `docker-compose.yml`. Compose czyta plik tylko z bieżącego katalogu. Uruchomienie z innego miejsca kończy się komunikatem `no configuration file provided: not found`.
+
+```bash
+git clone <adres-repozytorium> JarvisAgent
+cd JarvisAgent
+ls docker-compose.yml
+```
 
 W tym samym katalogu utwórz plik `.env`:
 
@@ -49,9 +55,10 @@ Pulpit OCI nie startuje razem ze stosem. W `/admin` przycisk pulpitu woła profi
 
 Strażnik, gdy ma sprawdzać publiczną nazwę, dostaje `JARVIS_PUBLIC_HOST`. To może być ten sam host co Caddy albo nazwa tunelu Cloudflare albo DuckDNS.
 
-Aktualizacja:
+Aktualizacja, nadal z katalogu głównego repozytorium:
 
 ```bash
+cd ~/JarvisAgent
 git pull
 docker compose up -d --build
 ```
@@ -71,6 +78,7 @@ To jest adres Caddy, nie adres Vercel. Czat, ciasteczko, WebSocket, terminal i p
 Po pierwszym wdrożeniu skopiuj dokładny adres strony do `JARVIS_WEB_ORIGIN` na VM i przebuduj rdzeń:
 
 ```bash
+cd ~/JarvisAgent
 docker compose up -d --build core
 ```
 
