@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JarvisEvent",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "user_text" },
+        "text": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "presence" },
+        "speech": { "type": "boolean" },
+        "idle": { "type": "boolean" },
+        "away": { "type": "boolean" },
+        "app": { "type": "string" },
+        "window": { "type": "string" },
+        "telemetry": { "type": "object" },
+        "capabilities": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "id", "accept"],
+      "properties": {
+        "type": { "const": "confirm" },
+        "id": { "type": "string" },
+        "accept": { "type": "boolean" },
+        "via": { "enum": ["voice", "button", "text"] }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "token" },
+        "text": { "type": "string" },
+        "final": { "type": "boolean" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "widget"],
+      "properties": {
+        "type": { "const": "widget" },
+        "widget": { "type": "object" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "id", "summary"],
+      "properties": {
+        "type": { "const": "confirm_request" },
+        "id": { "type": "string" },
+        "summary": { "type": "string" },
+        "body": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "device_id"],
+      "properties": {
+        "type": { "const": "move_presence" },
+        "device_id": { "type": "string" },
+        "whole_task": { "type": "boolean" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "quiet" },
+        "text": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "title"],
+      "properties": {
+        "type": { "const": "digest" },
+        "app": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" }
+      }
+    }
+  ]
+}

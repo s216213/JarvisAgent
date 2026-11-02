@@ -1,0 +1,19 @@
+<Window
+    x:Class="JarvisDesktop.HudWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Jarvis"
+    Width="560"
+    Height="72">
+    <Border Background="#101820" BorderBrush="#1E3344" BorderThickness="1" CornerRadius="12" Padding="16,8">
+        <StackPanel>
+            <TextBlock x:Name="Status" Foreground="#8AA0B2" FontSize="13" Text="cisza" />
+            <TextBlock x:Name="Line" Foreground="#E7F6FF" FontSize="18" TextWrapping="Wrap" />
+            <StackPanel x:Name="Consent" Orientation="Horizontal" Visibility="Collapsed" Spacing="8">
+                <TextBlock x:Name="ConsentBody" Foreground="#E8A54B" FontFamily="Consolas" FontSize="13" />
+                <Button Content="Tak" Click="Accept" />
+                <Button Content="Nie" Click="Reject" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

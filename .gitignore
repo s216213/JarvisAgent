@@ -1,0 +1,11 @@
+target/
+data/*.db
+data/*.key
+data/jarvis.env
+node_modules/
+dist/
+apps/web/node_modules/
+apps/web/dist/
+.DS_Store
+*.user
+.vs/
