@@ -98,13 +98,9 @@ async fn login(
     let mut cookie = Cookie::build(("jarvis_session", session.clone()))
         .http_only(true)
         .path("/")
-        .same_site(if secure {
-            cookie::SameSite::None
-        } else {
-            cookie::SameSite::Lax
-        });
+        .same_site(cookie::SameSite::Lax);
     if secure {
-        cookie = cookie.secure(true).partitioned(true);
+        cookie = cookie.secure(true);
     }
     (
         StatusCode::OK,

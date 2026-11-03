@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "apps/core/**"
+      - "apps/web/**"
       - "vendor/branches/**"
       - "deploy/**"
       - "docker-compose.yml"

@@ -6,5 +6,15 @@
 
 {$JARVIS_DOMAIN:localhost} {
 	header Alt-Svc clear
-	reverse_proxy core:8080
+	handle /api/* {
+		reverse_proxy core:8080
+	}
+	handle /health {
+		reverse_proxy core:8080
+	}
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
 }

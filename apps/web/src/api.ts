@@ -1,4 +1,12 @@
-export const apiBase = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+const configured = import.meta.env.VITE_API_URL?.trim().replace(/\/$/, "");
+export const apiBase = configured ? configured : "";
+
+function socketUrl(path: string): URL {
+  const base = apiBase || window.location.origin;
+  const url = new URL(path, base);
+  url.protocol = base.startsWith("https:") ? "wss:" : "ws:";
+  return url;
+}
 
 export type LoginResult = "ok" | "bad" | "empty";
 
@@ -29,16 +37,14 @@ function withSession(url: URL) {
 }
 
 export function socket(deviceId: string): WebSocket {
-  const url = new URL("/api/ws", apiBase);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const url = socketUrl("/api/ws");
   url.searchParams.set("device_id", deviceId);
   withSession(url);
   return new WebSocket(url);
 }
 
 export function terminalSocket(): WebSocket {
-  const url = new URL("/api/term", apiBase);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const url = socketUrl("/api/term");
   withSession(url);
   return new WebSocket(url);
 }

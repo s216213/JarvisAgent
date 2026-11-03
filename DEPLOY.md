@@ -1,8 +1,8 @@
 # Wdrożenie Jarvisa
 
-WinUI i Android budujesz na swoim komputerze. Na Vercel idzie tylko statyczny czat i `/admin`. Mózg, baza, SearXNG, terminal i ewentualny pulpit zostają na maszynie OCI.
+WinUI i Android budujesz na swoim komputerze. Czat i `/admin` to statyczny build Vite, który Caddy serwuje na tej samej nazwie co rdzeń. Mózg, baza, SearXNG, terminal i ewentualny pulpit zostają na maszynie OCI.
 
-Kolejność: najpierw VM, potem Vercel, na końcu sparowanie Windowsa i telefonu. Adres strony i adres API muszą do siebie pasować, zanim otworzysz logowanie z internetu.
+Kolejność: najpierw VM, na końcu sparowanie Windowsa i telefonu. Stronę otwierasz pod adresem API.
 
 ## OCI
 
@@ -28,7 +28,7 @@ W tym samym katalogu utwórz plik `.env`:
 
 ```bash
 JARVIS_DOMAIN=jarvis.twoja-domena.pl
-JARVIS_WEB_ORIGIN=https://twoj-projekt.vercel.app
+JARVIS_WEB_ORIGIN=https://jarvis.twoja-domena.pl
 JARVIS_COOKIE_SECURE=1
 JARVIS_WEB_PASSWORD=dlugie-haslo
 JARVIS_PAIR_CODE=jednorazowy-kod
@@ -37,7 +37,7 @@ GEMINI_API_KEY=
 OPENROUTER_API_KEY=
 ```
 
-`JARVIS_DOMAIN` to nazwa, na którą Caddy wystawi HTTPS dla API i WebSocket. Ta zmienna musi wejść do kontenera Caddy. W `.env` ma być sama nazwa, bez `https://`, na przykład `gawr-jarvis.duckdns.org`. Rekord A w DuckDNS wskazuje publiczny adres VM. Porty 80 i 443 są otwarte w liście zabezpieczeń VCN i w zaporze samej VM. Bez portu 80 Caddy nie dostanie certyfikatu Let's Encrypt, a `curl` kończy się błędem TLS `internal error`. `JARVIS_WEB_ORIGIN` to dokładny adres produkcji z Vercel, razem z `https://` i bez ukośnika na końcu. `JARVIS_COOKIE_SECURE=1` jest wymagane, bo strona i API są na różnych hostach. Hasło web nie zostawiaj puste: bez tej zmiennej rdzeń przyjmuje hasło `jarvis`.
+`JARVIS_DOMAIN` to nazwa, na którą Caddy wystawi HTTPS dla strony, API i WebSocket. Ta zmienna musi wejść do kontenera Caddy. W `.env` ma być sama nazwa, bez `https://`, na przykład `gawr-jarvis.duckdns.org`. Rekord A w DuckDNS wskazuje publiczny adres VM. Porty 80 i 443 są otwarte w liście zabezpieczeń VCN i w zaporze samej VM. Bez portu 80 Caddy nie dostanie certyfikatu Let's Encrypt, a `curl` kończy się błędem TLS `internal error`. `JARVIS_WEB_ORIGIN` to ten sam adres, razem z `https://` i bez ukośnika na końcu. `JARVIS_COOKIE_SECURE=1` jest wymagane, bo publiczna strona idzie po HTTPS. Hasło web nie zostawiaj puste: bez tej zmiennej rdzeń przyjmuje hasło `jarvis`.
 
 Klucze Groq, Gemini i OpenRouter są opcjonalne w tym pliku. Da się je też wpisać później w `/admin`. Sync Turso zostaje wyłączony, dopóki w panelu nie włączysz flagi `turso_sync` i nie podasz `TURSO_DATABASE_URL` oraz tokenu.
 
@@ -77,25 +77,17 @@ bash deploy/oci-up.sh
 
 Dockerfile składa obraz w dwóch krokach. Najpierw kompiluje zależności na pustym `main.rs`. Ta warstwa zostaje, dopóki nie zmienią się `Cargo.toml`, `Cargo.lock` albo `vendor/branches`. Drugi krok dokłada prawdziwe źródła i kompiluje sam `jarvis-core`. Rejestr crate'ów jest w cache BuildKita, więc ponowne pobieranie też odpada. Profil release ma `opt-level` 2 i wyłączone LTO, żeby Ampere kończył ten drugi krok szybko. Pierwsza budowa po tej zmianie i tak przejdzie wszystkie skrzynki. `docker builder prune` kasuje ten zysk do następnej pełnej kompilacji.
 
-`deploy/oci-up.sh` buduje tylko `core`, podnosi Caddy i SearXNG bez przebudowy i czeka, aż `http://127.0.0.1:8080/health` wewnątrz kontenera zwróci odpowiedź.
+`deploy/oci-up.sh` buduje `core` i Caddy ze stroną, podnosi SearXNG i czeka, aż `http://127.0.0.1:8080/health` wewnątrz kontenera rdzenia zwróci odpowiedź.
 
-## Vercel
+## Strona
 
-Na Vercel wjeżdża wyłącznie `apps/web`. Katalog główny projektu ustaw na `apps/web`. Menedżer pakietów to pnpm. Polecenie budowania zostaje domyślne: `pnpm build`. `vercel.json` w tym katalogu już przepisuje ścieżki na `index.html`.
+Caddy serwuje `apps/web` z tego samego kontenera, który kończy TLS. `/api` i `/health` idą do rdzenia. Każda inna ścieżka, której nie ma na dysku, dostaje `index.html`. Budowa nie dostaje `VITE_API_URL`, więc czat i WebSocket zostają na hoście strony.
 
-Jedna zmienna środowiska, dostępna przy budowaniu:
-
-```text
-VITE_API_URL=https://jarvis.twoja-domena.pl
-```
-
-To jest adres Caddy, nie adres Vercel. Czat, ciasteczko, WebSocket, terminal i pulpit idą prosto na OCI. Vercel nie może ich proxować.
-
-Po pierwszym wdrożeniu skopiuj dokładny adres strony do `JARVIS_WEB_ORIGIN` na VM i przebuduj rdzeń:
+Na VM ustaw `JARVIS_WEB_ORIGIN` na `https://` plus wartość `JARVIS_DOMAIN`. Potem przebuduj stos:
 
 ```bash
 cd ~/JarvisAgent
-docker compose up -d --build core
+bash deploy/oci-up.sh
 ```
 
 Wejście na stronę to jedno pole hasła. Wartość to `JARVIS_WEB_PASSWORD` z VM. `/admin` używa tego samego hasła i nie przenosi rozmowy.
