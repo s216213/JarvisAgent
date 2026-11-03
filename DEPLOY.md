@@ -55,13 +55,29 @@ Pulpit OCI nie startuje razem ze stosem. W `/admin` przycisk pulpitu woła profi
 
 Strażnik, gdy ma sprawdzać publiczną nazwę, dostaje `JARVIS_PUBLIC_HOST`. To może być ten sam host co Caddy albo nazwa tunelu Cloudflare albo DuckDNS.
 
-Aktualizacja, nadal z katalogu głównego repozytorium:
+Aktualizacja z GitHuba: push na `main`, który dotyka `apps/core`, `vendor/branches`, `deploy`, `docker-compose.yml` albo `.dockerignore`, uruchamia workflow `Deploy OCI`. Runner tylko wchodzi po SSH na VM. Obraz buduje się na Ampere, z lokalnego cache Dockera.
+
+W repozytorium GitHub, w Settings → Secrets and variables → Actions, dodaj:
+
+| Sekret | Wartość |
+| --- | --- |
+| `OCI_HOST` | publiczny adres VM, IP albo nazwa DuckDNS |
+| `OCI_USER` | użytkownik SSH, zwykle `ubuntu` |
+| `OCI_SSH_KEY` | prywatny klucz, którego publiczna połowa jest w `~/.ssh/authorized_keys` na VM |
+
+Katalog `~/JarvisAgent` na VM ma być klonem `origin/main` bez lokalnych zmian w śledzonych plikach. `.env` zostaje na miejscu, bo nie jest w gicie. Jeśli repozytorium jest prywatne, na VM dodaj deploy key z prawem odczytu, inaczej `git pull` w workflow się nie powiedzie.
+
+Ręcznie, z katalogu głównego, ten sam skrypt:
 
 ```bash
 cd ~/JarvisAgent
-git pull
-docker compose up -d --build
+git pull --ff-only
+bash deploy/oci-up.sh
 ```
+
+Dockerfile składa obraz w dwóch krokach. Najpierw kompiluje zależności na pustym `main.rs`. Ta warstwa zostaje, dopóki nie zmienią się `Cargo.toml`, `Cargo.lock` albo `vendor/branches`. Drugi krok dokłada prawdziwe źródła i kompiluje sam `jarvis-core`. Rejestr crate'ów jest w cache BuildKita, więc ponowne pobieranie też odpada. Profil release ma `opt-level` 2 i wyłączone LTO, żeby Ampere kończył ten drugi krok szybko. Pierwsza budowa po tej zmianie i tak przejdzie wszystkie skrzynki. `docker builder prune` kasuje ten zysk do następnej pełnej kompilacji.
+
+`deploy/oci-up.sh` buduje tylko `core`, podnosi Caddy i SearXNG bez przebudowy i czeka, aż `http://127.0.0.1:8080/health` wewnątrz kontenera zwróci odpowiedź.
 
 ## Vercel
 
@@ -96,7 +112,7 @@ Wtedy origin to `http://localhost:5173`, a `JARVIS_COOKIE_SECURE` zostaje wyłą
 
 ## WinUI
 
-Budowa jest lokalna, na Windowsie. Potrzebny jest .NET 8 SDK i Windows App SDK, które dociąga projekt.
+Budowa jest lokalna, na Windowsie. Potrzebny jest .NET 10 SDK i Windows App SDK, które dociąga projekt.
 
 ```powershell
 cd apps\desktop

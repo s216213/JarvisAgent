@@ -87,7 +87,7 @@ async fn login(
     let session = Uuid::new_v4().to_string();
     app.web_sessions.lock().await.insert(session.clone(), ());
     let secure = std::env::var("JARVIS_COOKIE_SECURE").ok().as_deref() == Some("1");
-    let mut cookie = Cookie::build(("jarvis_session", session))
+    let mut cookie = Cookie::build(("jarvis_session", session.clone()))
         .http_only(true)
         .path("/")
         .same_site(if secure {
@@ -101,12 +101,20 @@ async fn login(
     (
         StatusCode::OK,
         [(header::SET_COOKIE, cookie.build().to_string())],
-        "ok",
+        Json(json!({"session": session})),
     )
         .into_response()
 }
 
 fn session_ok(app: &App, headers: &HeaderMap) -> impl std::future::Future<Output = bool> + Send {
+    session_with(app, headers, None)
+}
+
+fn session_with(
+    app: &App,
+    headers: &HeaderMap,
+    query_session: Option<String>,
+) -> impl std::future::Future<Output = bool> + Send {
     let app = app.clone();
     let raw = headers
         .get(header::COOKIE)
@@ -120,6 +128,11 @@ fn session_ok(app: &App, headers: &HeaderMap) -> impl std::future::Future<Output
         .trim_start_matches("Bearer ")
         .to_string();
     async move {
+        if let Some(token) = query_session.as_deref() {
+            if !token.is_empty() && app.web_sessions.lock().await.contains_key(token) {
+                return true;
+            }
+        }
         if let Ok(jar) = cookie::Cookie::parse(raw.split(';').next().unwrap_or("")) {
             if jar.name() == "jarvis_session" && app.web_sessions.lock().await.contains_key(jar.value())
             {
@@ -163,7 +176,19 @@ async fn flags_get(State(app): State<App>, headers: HeaderMap) -> impl IntoRespo
         return (StatusCode::INTERNAL_SERVER_ERROR, "baza").into_response();
     };
     match db::list_flags(&conn).await {
-        Ok(flags) => Json(json!({"flags": flags.into_iter().map(|(name, enabled)| json!({"name": name, "enabled": enabled})).collect::<Vec<_>>()})).into_response(),
+        Ok(flags) => {
+            let body = flags
+                .into_iter()
+                .map(|(name, enabled)| {
+                    json!({
+                        "name": name,
+                        "enabled": enabled,
+                        "description": db::flag_description(&name),
+                    })
+                })
+                .collect::<Vec<_>>();
+            Json(json!({"flags": body})).into_response()
+        }
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     }
 }
@@ -301,12 +326,19 @@ async fn desktop_post(State(app): State<App>, headers: HeaderMap) -> impl IntoRe
     Json(json!({"text": host::start_desktop().await})).into_response()
 }
 
+#[derive(Deserialize)]
+struct TermQuery {
+    session: Option<String>,
+}
+
 async fn term(
     State(app): State<App>,
     headers: HeaderMap,
+    Query(query): Query<TermQuery>,
     upgrade: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    if !session_ok(&app, &headers).await {
+    if !session_with(&app, &headers, query.session).await {
+        tracing::warn!("terminal odrzucony, brak sesji");
         return (StatusCode::UNAUTHORIZED, "brak sesji").into_response();
     }
     if let Ok(conn) = app.db.connect() {
@@ -381,6 +413,7 @@ async fn vision(
 #[derive(Deserialize)]
 struct WsQuery {
     device_id: Option<String>,
+    session: Option<String>,
 }
 
 async fn ws(
@@ -389,7 +422,7 @@ async fn ws(
     Query(query): Query<WsQuery>,
     upgrade: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    if !session_ok(&app, &headers).await {
+    if !session_with(&app, &headers, query.session).await {
         return (StatusCode::UNAUTHORIZED, "brak sesji").into_response();
     }
     let device_id = query

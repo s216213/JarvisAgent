@@ -111,6 +111,38 @@ async fn migrate(conn: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
+const FLAG_COPY: &[(&str, &str)] = &[
+    ("voice", "Fraza wybudzająca, nasłuch i mowa na komputerze i telefonie. Przełącznik jest zapisany; rdzeń go nie sprawdza."),
+    ("hud", "Pływający pasek ze statusem i linijką odpowiedzi. Przełącznik jest zapisany; rdzeń go nie sprawdza."),
+    ("palette", "Paleta Alt+Space: notatka, program, polecenie. Przełącznik jest zapisany; rdzeń go nie sprawdza."),
+    ("clipboard", "Schowek idzie na pozostałe urządzenia. Tekst podobny do sekretu i tak zostaje."),
+    ("telemetry", "Lokalizacja, bateria i stan maszyny przy obecności. Przełącznik jest zapisany; rdzeń go nie sprawdza."),
+    ("proactive", "Jarvis mówi, gdy bateria zejdzie poniżej progu."),
+    ("desktop_modes", "Przełączenie trybu pulpitu, także trybu nauki, w którym powiadomienia czekają."),
+    ("shell", "Polecenie w powłoce. Najpierw karta zgody."),
+    ("scripts", "Jednorazowy skrypt. Najpierw karta zgody."),
+    ("digest", "Skrót powiadomień: ludzie, terminy, alarmy."),
+    ("schedule", "Zapis i odpalenie harmonogramu ustalonego w rozmowie."),
+    ("classifier", "Surowa myśl ląduje jako notatka w folderze vaultu."),
+    ("links", "Nowa notatka dostaje sekcję Powiązania."),
+    ("graph", "Z rozmowy powstają fakty, osoby, projekty i krawędzie."),
+    ("map", "Widget mapy i linia pogody."),
+    ("search", "Szukanie w sieci i karta z wynikiem."),
+    ("vision_screen", "Opis bieżącego ekranu Windows."),
+    ("vision_camera", "Zdjęcie z aparatu i opis tabliczki, układu albo dokumentu."),
+    ("health_guard", "Podnosi padniętą usługę Dockera, najwyżej trzy razy na godzinę."),
+    ("log_analyzer", "Przy panic albo 500 zostawia propozycję poprawki w vaultcie. Liczy się tylko w takcie strażnika."),
+    ("turso_sync", "Zgoda na sync pliku bazy. Sam adres Turso w env kopii nie uruchamia. Domyślnie wyłączona."),
+];
+
+pub fn flag_description(name: &str) -> &'static str {
+    FLAG_COPY
+        .iter()
+        .find(|(key, _)| *key == name)
+        .map(|(_, text)| *text)
+        .unwrap_or("Brak opisu.")
+}
+
 async fn seed_flags(conn: &Connection) -> anyhow::Result<()> {
     let flags = [
         ("voice", 1),

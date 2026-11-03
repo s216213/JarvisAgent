@@ -1,0 +1,37 @@
+﻿<Window
+    x:Class="JarvisDesktop.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Jarvis">
+    <Grid Background="{StaticResource Bg}" RequestedTheme="Dark">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="2" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock Grid.Row="0" Text="Jarvis" Margin="24,16,24,16" Foreground="{StaticResource Accent}" FontFamily="Consolas" FontSize="13" />
+        <Border Grid.Row="1" Background="{StaticResource Line}" />
+        <ScrollViewer Grid.Row="2" Padding="24,16,24,24">
+            <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left">
+                <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="Parowanie" Foreground="{StaticResource Text}" FontSize="18" />
+                        <TextBlock x:ConnectionId='4' x:Name="VoiceStatus" Foreground="{StaticResource Muted}" FontFamily="Consolas" FontSize="13" />
+                        <TextBox x:ConnectionId='5' x:Name="Api" Text="http://localhost:8080" Background="{StaticResource Panel}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line}" Padding="12,8" />
+                        <TextBox x:ConnectionId='6' x:Name="Code" PlaceholderText="Kod parowania" Background="{StaticResource Panel}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line}" Padding="12,8" />
+                        <Button x:ConnectionId='7' Content="Sparuj ten komputer"              HorizontalAlignment="Left" Background="{StaticResource Accent}" Foreground="{StaticResource Bg}" BorderThickness="0" Padding="16,8" />
+                        <TextBlock x:ConnectionId='8' x:Name="Hint" Foreground="{StaticResource Text}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="Paleta" Foreground="{StaticResource Text}" FontSize="18" />
+                        <TextBox x:ConnectionId='2' x:Name="Palette" PlaceholderText="Alt+Space: notatka, program, polecenie"                      Background="{StaticResource Panel}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line}" Padding="12,8" />
+                        <TextBlock x:ConnectionId='3' x:Name="Log" Foreground="{StaticResource Muted}" FontFamily="Consolas" FontSize="13" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>
+

@@ -103,8 +103,9 @@ public static class Machine
     {
         var hwnd = GetForegroundWindow();
         if (hwnd == 0) return null;
+        var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
         var item = Windows.Graphics.Capture.GraphicsCaptureItem.TryCreateFromWindowId(
-            Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd));
+            new Windows.UI.WindowId(windowId.Value));
         if (item is null) return null;
         return JsonSerializer.Serialize(new { window = item.DisplayName, width = item.Size.Width, height = item.Size.Height });
     }

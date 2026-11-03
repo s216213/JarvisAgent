@@ -13,6 +13,8 @@ services:
       JARVIS_DEPLOY: /app
       JARVIS_WEB_ORIGIN: ${JARVIS_WEB_ORIGIN:-http://localhost:5173}
       JARVIS_COOKIE_SECURE: ${JARVIS_COOKIE_SECURE:-0}
+      JARVIS_WEB_PASSWORD: ${JARVIS_WEB_PASSWORD:-}
+      JARVIS_PAIR_CODE: ${JARVIS_PAIR_CODE:-}
     volumes:
       - jarvis-data:/data
       - /var/run/docker.sock:/var/run/docker.sock

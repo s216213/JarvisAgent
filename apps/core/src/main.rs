@@ -31,7 +31,10 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("JARVIS_DB").unwrap_or_else(|_| data.join("jarvis.db").display().to_string()),
     );
     let database = db::open(&db_path).await?;
-    let password = std::env::var("JARVIS_WEB_PASSWORD").unwrap_or_else(|_| "jarvis".into());
+    let password = std::env::var("JARVIS_WEB_PASSWORD")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "jarvis".into());
     let password_hash = if password.starts_with("$argon2") {
         password
     } else {

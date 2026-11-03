@@ -1,0 +1,36 @@
+name: Deploy OCI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/core/**"
+      - "vendor/branches/**"
+      - "deploy/**"
+      - "docker-compose.yml"
+      - ".dockerignore"
+      - ".github/workflows/deploy-oci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: oci-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wdrożenie na VM
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_USER: ${{ secrets.OCI_USER }}
+          OCI_SSH_KEY: ${{ secrets.OCI_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$OCI_SSH_KEY" > ~/.ssh/oci
+          chmod 600 ~/.ssh/oci
+          ssh-keyscan -H "$OCI_HOST" >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/oci -o StrictHostKeyChecking=yes \
+            "$OCI_USER@$OCI_HOST" \
+            "cd ~/JarvisAgent && git fetch origin && git checkout main && git pull --ff-only origin main && bash deploy/oci-up.sh"

@@ -5,7 +5,9 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
+import android.widget.LinearLayout
 import android.widget.TextView
 
 class HudService : Service() {
@@ -20,12 +22,26 @@ class HudService : Service() {
             .build()
         startForeground(1, notice)
         if (label == null && android.provider.Settings.canDrawOverlays(this)) {
+            val density = resources.displayMetrics.density
+            val pad = (16 * density).toInt()
+            val bar = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setBackgroundColor(0xDB101820.toInt())
+                setPadding(0, pad, pad, pad)
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val accent = View(this).apply { setBackgroundColor(0xFF7FDBFF.toInt()) }
+            bar.addView(
+                accent,
+                LinearLayout.LayoutParams((2 * density).toInt().coerceAtLeast(2), (18 * density).toInt()),
+            )
             label = TextView(this).apply {
                 text = "cisza"
                 setTextColor(0xFFE7F6FF.toInt())
-                setBackgroundColor(0xDD101820.toInt())
                 textSize = 18f
+                setPadding(pad, 0, 0, 0)
             }
+            bar.addView(label)
             val type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -35,7 +51,7 @@ class HudService : Service() {
                 android.graphics.PixelFormat.TRANSLUCENT,
             )
             params.gravity = Gravity.TOP
-            getSystemService(WindowManager::class.java).addView(label, params)
+            getSystemService(WindowManager::class.java).addView(bar, params)
         }
         return START_STICKY
     }

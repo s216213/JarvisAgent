@@ -1,0 +1,25 @@
+﻿<Window
+    x:Class="JarvisDesktop.HudWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Jarvis">
+    <Border Background="#101820" BorderBrush="#1E3344" BorderThickness="1" CornerRadius="12" Padding="16,28,16,12">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Background="#7FDBFF" />
+            <StackPanel Grid.Column="1" Spacing="8" Margin="16,0,0,0">
+                <TextBlock x:ConnectionId='2' x:Name="Status" Foreground="#8AA0B2" FontFamily="Consolas" FontSize="13" Text="cisza" />
+                <TextBlock x:ConnectionId='3' x:Name="Line" Foreground="#E7F6FF" FontSize="18" TextWrapping="Wrap" />
+                <StackPanel x:ConnectionId='4' x:Name="Consent" Orientation="Horizontal" Visibility="Collapsed" Spacing="8">
+                    <TextBlock x:ConnectionId='5' x:Name="ConsentBody" Foreground="#E8A54B" FontFamily="Consolas" FontSize="13" TextWrapping="Wrap" MaxWidth="280" VerticalAlignment="Center" />
+                    <Button x:ConnectionId='6' Content="Tak"                Background="Transparent" Foreground="#E8A54B" BorderBrush="#E8A54B" BorderThickness="1" Padding="16,8" />
+                    <Button x:ConnectionId='7' Content="Nie"                Background="Transparent" Foreground="#FF6B6B" BorderBrush="#FF6B6B" BorderThickness="1" Padding="16,8" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
+

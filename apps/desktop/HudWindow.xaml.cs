@@ -1,5 +1,6 @@
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Windows.Graphics;
 using WinRT.Interop;
 
 namespace JarvisDesktop;
@@ -15,6 +16,7 @@ public sealed partial class HudWindow : Window
         var hwnd = WindowNative.GetWindowHandle(this);
         var id = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
         var app = AppWindow.GetFromWindowId(id);
+        app.Resize(new SizeInt32(560, 168));
         app.SetPresenter(AppWindowPresenterKind.CompactOverlay);
         ExtendsContentIntoTitleBar = true;
     }

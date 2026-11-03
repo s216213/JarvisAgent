@@ -20,11 +20,11 @@ async function submit() {
 </script>
 
 <template>
-  <main class="shell">
-    <section class="panel">
-      <h1>Jarvis</h1>
-      <p class="muted">Jedno hasło. Nic więcej.</p>
-      <form @submit.prevent="submit">
+  <main class="shell gate">
+    <section class="frame">
+      <form class="stack" @submit.prevent="submit">
+        <h1>Jarvis</h1>
+        <p class="muted">Jedno hasło. Nic więcej.</p>
         <input v-model="password" type="password" autocomplete="current-password" placeholder="Hasło" />
         <p v-if="error" class="error">{{ error }}</p>
         <button class="accent" type="submit">Wejdź</button>

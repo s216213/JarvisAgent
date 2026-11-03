@@ -1,7 +1,10 @@
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Graphics;
 using Windows.System;
+using WinRT.Interop;
 
 namespace JarvisDesktop;
 
@@ -16,6 +19,9 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        var hwnd = WindowNative.GetWindowHandle(this);
+        var id = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+        AppWindow.GetFromWindowId(id).Resize(new SizeInt32(720, 640));
         VoiceStatus.Text = _voice.Status;
         _hud.Activate();
         _hud.ShowLine(_voice.Ready ? "słucham" : "tekst", _voice.Status);

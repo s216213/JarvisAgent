@@ -17,14 +17,23 @@ type Widget = {
 };
 type Card = { id: string; summary: string; body: string };
 
+const stateLabel: Record<string, string> = {
+  idle: "spoczynek",
+  working: "praca",
+  empty: "pusty",
+  error: "błąd",
+  consent: "zgoda",
+};
+
 const router = useRouter();
 const lines = ref<Line[]>([]);
 const draft = ref("");
-const state = ref("idle");
+const state = ref("empty");
 const widget = ref<Widget | null>(null);
 const card = ref<Card | null>(null);
 const error = ref("");
 const mapHost = ref<HTMLElement | null>(null);
+const transcript = ref<HTMLElement | null>(null);
 let map: maplibregl.Map | null = null;
 let ws: WebSocket | null = null;
 let buffer = "";
@@ -55,6 +64,13 @@ function paintMap(next: Widget) {
   });
 }
 
+function stick() {
+  nextTick(() => {
+    const pane = transcript.value;
+    if (pane) pane.scrollTop = pane.scrollHeight;
+  });
+}
+
 function onMessage(raw: string) {
   const event = JSON.parse(raw);
   if (event.type === "token") {
@@ -63,6 +79,7 @@ function onMessage(raw: string) {
     const last = lines.value.at(-1);
     if (last?.role === "jarvis") last.text = buffer.trim();
     else lines.value.push({ role: "jarvis", text: buffer.trim() });
+    stick();
   }
   if (event.type === "done") {
     buffer = "";
@@ -89,6 +106,7 @@ function submit() {
   lines.value.push({ role: "ja", text });
   draft.value = "";
   state.value = "working";
+  stick();
   if (text.toLowerCase() === "tak" && card.value) {
     send({ type: "confirm", id: card.value.id, accept: true, via: "text" });
     card.value = null;
@@ -133,34 +151,44 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="shell" :data-state="state">
-    <nav class="nav">
-      <a href="/">Czat</a>
-      <a href="/admin">Admin</a>
-      <span class="muted">{{ state }}</span>
-    </nav>
-    <section class="panel" v-if="lines.length === 0">
-      <p class="muted">Napisz tak, jakbyś mówił. Jarvis ma tu te same narzędzia co w głosie.</p>
-    </section>
-    <section class="panel" v-for="(line, index) in lines" :key="index">
-      <p class="muted">{{ line.role }}</p>
-      <p>{{ line.text }}</p>
-    </section>
-    <section class="panel" v-if="widget">
-      <p class="muted">{{ widget.title }}</p>
-      <p>{{ widget.body }}</p>
-      <div v-if="widget.type === 'map'" ref="mapHost" style="height: 280px"></div>
-    </section>
-    <section class="panel" v-if="card">
-      <p>{{ card.summary }}</p>
-      <pre class="mono">{{ card.body }}</pre>
-      <button class="warn" @click="decide(true)">Tak</button>
-      <button class="danger" @click="decide(false)">Nie</button>
-    </section>
-    <p v-if="error" class="error">{{ error }}</p>
-    <form class="panel" @submit.prevent="submit">
-      <input v-model="draft" placeholder="Napisz do Jarvisa" />
-      <button class="accent" type="submit">Wyślij</button>
-    </form>
+  <main class="shell stage" :data-state="state">
+    <header class="topbar">
+      <span class="mark">Jarvis</span>
+      <nav class="nav">
+        <a href="/" aria-current="page">Czat</a>
+        <a href="/admin">Admin</a>
+      </nav>
+      <span class="pill">{{ stateLabel[state] ?? state }}</span>
+    </header>
+    <div class="state-line"></div>
+    <div class="stage-body">
+      <section class="frame transcript" ref="transcript">
+        <p v-if="lines.length === 0" class="muted">Napisz tak, jakbyś mówił. Jarvis ma tu te same narzędzia co w głosie.</p>
+        <article v-for="(line, index) in lines" :key="index" class="line" :class="line.role === 'jarvis' ? 'line-jarvis' : 'line-ja'">
+          <p class="muted">{{ line.role === "jarvis" ? "Jarvis" : "Ty" }}</p>
+          <p>{{ line.text }}</p>
+        </article>
+      </section>
+      <section class="frame widget-slot" v-if="widget">
+        <p class="muted">{{ widget.title }}</p>
+        <p>{{ widget.body }}</p>
+        <div v-if="widget.type === 'map'" ref="mapHost" class="map-host"></div>
+      </section>
+    </div>
+    <footer class="dock">
+      <section class="frame consent" v-if="card">
+        <p>{{ card.summary }}</p>
+        <pre class="mono">{{ card.body }}</pre>
+        <div class="row">
+          <button class="warn" @click="decide(true)">Tak</button>
+          <button class="danger" @click="decide(false)">Nie</button>
+        </div>
+      </section>
+      <p v-if="error" class="error">{{ error }}</p>
+      <form class="composer" @submit.prevent="submit">
+        <input v-model="draft" placeholder="Napisz do Jarvisa" />
+        <button class="accent" type="submit">Wyślij</button>
+      </form>
+    </footer>
   </main>
 </template>

@@ -1,8 +1,13 @@
 target
 .git
-apps/web/node_modules
-apps/web/dist
+.github
+apps/web
+apps/desktop
+apps/mobile
 data
 **/*.md
 !design/tokens.md
 !vendor/**/*.md
+**/obj
+**/bin
+vendor/**/target
