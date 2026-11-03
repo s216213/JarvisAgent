@@ -462,7 +462,7 @@ fn catalog_url(provider: &str) -> anyhow::Result<&'static str> {
 
 fn fallback(provider: &str) -> Vec<String> {
     match provider {
-        "gemini" => vec!["gemini-3.8-flash".into(), "gemini-2.0-flash".into()],
+        "gemini" => vec!["gemini-3.8-flash".into(), "gemini-flash-latest".into()],
         "groq" => vec!["llama-3.3-70b-versatile".into()],
         "openrouter" => vec!["openrouter/free".into()],
         "mistral" => vec!["mistral-small-latest".into()],
@@ -495,7 +495,7 @@ fn rank_models(value: &Value) -> Vec<String> {
         let Some(id) = model_id(item) else {
             continue;
         };
-        if !is_chat_model(item, &id) {
+        if !is_chat_model(item, &id) || !is_free_tier(item, &id) {
             continue;
         }
         listed.push(Listed {
@@ -575,6 +575,26 @@ fn version_parts(id: &str) -> Vec<u32> {
     parts
 }
 
+fn is_free_tier(item: &Value, id: &str) -> bool {
+    if let Some(pricing) = item.get("pricing") {
+        return is_zero(&pricing["prompt"]) && is_zero(&pricing["completion"]);
+    }
+    let id = id.to_ascii_lowercase();
+    if id.ends_with(":free") || id.contains("/free") || id.contains("-free") {
+        return true;
+    }
+    const PAID: &[&str] = &["-pro", "pro-", "/pro", "ultra", "opus", "argon", "-plus"];
+    !PAID.iter().any(|part| id.contains(part)) && !id.ends_with("pro")
+}
+
+fn is_zero(value: &Value) -> bool {
+    value
+        .as_f64()
+        .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+        .unwrap_or(1.0)
+        == 0.0
+}
+
 fn family(id: &str) -> u8 {
     let id = id.to_ascii_lowercase();
     if id.starts_with("gemini") || id.starts_with("gemma") || id.contains("/gemini") || id.contains("/gemma")
@@ -629,8 +649,8 @@ mod tests {
         });
         let ranked = rank_models(&value);
         assert_eq!(ranked[0], "gemini-3.8-flash");
-        assert_eq!(ranked[1], "gemini-3.8-pro");
-        assert!(!ranked.iter().any(|id| id.contains("embed")));
+        assert_eq!(ranked[1], "gemini-2.5-flash");
+        assert!(!ranked.iter().any(|id| id.contains("pro") || id.contains("embed")));
     }
 
     #[test]
@@ -643,9 +663,18 @@ mod tests {
             ]
         });
         let ranked = rank_models(&value);
-        assert_eq!(ranked[0], "gemini-4-argon");
-        assert_eq!(ranked[1], "gemini-3.8-flash");
-        assert!(!ranked.iter().any(|id| id.contains("research")));
+        assert_eq!(ranked, vec!["gemini-3.8-flash"]);
+    }
+
+    #[test]
+    fn paid_catalog_entries_are_left_out() {
+        let value = json!({
+            "data": [
+                {"id": "vendor/big-pro", "pricing": {"prompt": "0.0002", "completion": "0.0008"}},
+                {"id": "vendor/flash:free", "pricing": {"prompt": "0", "completion": "0"}}
+            ]
+        });
+        assert_eq!(rank_models(&value), vec!["vendor/flash:free"]);
     }
 
     #[test]
