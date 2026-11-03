@@ -103,12 +103,14 @@ Wejście na stronę to jedno pole hasła. Wartość to `JARVIS_WEB_PASSWORD` z V
 Lokalny podgląd strony, z rdzeniem na `http://localhost:8080`:
 
 ```powershell
+copy .env.example .env
+copy apps\web\.env.example apps\web\.env
 cd apps\web
 pnpm install
 pnpm dev
 ```
 
-Wtedy origin to `http://localhost:5173`, a `JARVIS_COOKIE_SECURE` zostaje wyłączone.
+`.env` w katalogu głównym steruje rdzeniem przy `cargo run`. Poza Dockerem wartości z tego pliku wygrywają z `data/jarvis.env`, więc panel ich nie utrwala między restartami. Puste linie i komentarze są pomijane. Plik nie wchodzi do gita. `apps/web/.env` ustawia `VITE_API_URL` dla Vite. Origin zostaje `http://localhost:5173`, a `JARVIS_COOKIE_SECURE` wyłączone.
 
 ## WinUI
 

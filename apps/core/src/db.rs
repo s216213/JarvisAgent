@@ -95,6 +95,10 @@ async fn migrate(conn: &Connection) -> anyhow::Result<()> {
             status TEXT NOT NULL,
             detail TEXT
         );
+        CREATE TABLE IF NOT EXISTS web_sessions (
+            token_hash TEXT PRIMARY KEY,
+            created INTEGER NOT NULL
+        );
         ",
     )
     .await?;
@@ -212,6 +216,32 @@ pub async fn list_flags(conn: &Connection) -> anyhow::Result<Vec<(String, bool)>
         out.push((name, enabled != 0));
     }
     Ok(out)
+}
+
+pub async fn save_web_session(conn: &Connection, token_hash: &str) -> anyhow::Result<()> {
+    let now = chrono::Utc::now().timestamp();
+    conn.execute(
+        "INSERT INTO web_sessions (token_hash, created) VALUES (?1, ?2)
+         ON CONFLICT(token_hash) DO UPDATE SET created = excluded.created",
+        params![token_hash, now],
+    )
+    .await?;
+    Ok(())
+}
+
+pub async fn web_session_exists(conn: &Connection, token_hash: &str) -> anyhow::Result<bool> {
+    let mut rows = conn
+        .query(
+            "SELECT 1 FROM web_sessions WHERE token_hash = ?1",
+            params![token_hash],
+        )
+        .await?;
+    Ok(rows.next().await?.is_some())
+}
+
+pub async fn clear_web_sessions(conn: &Connection) -> anyhow::Result<()> {
+    conn.execute("DELETE FROM web_sessions", ()).await?;
+    Ok(())
 }
 
 pub async fn audit(conn: &Connection, kind: &str, detail: &str) -> anyhow::Result<()> {

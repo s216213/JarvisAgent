@@ -1,16 +1,26 @@
 export const apiBase = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
-export async function login(password: string): Promise<boolean> {
+export type LoginResult = "ok" | "bad" | "empty";
+
+export async function login(password: string): Promise<LoginResult> {
   const response = await fetch(`${apiBase}/api/login`, {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ password }),
   });
-  if (!response.ok) return false;
+  if (!response.ok) return "bad";
   const body = (await response.json().catch(() => ({}))) as { session?: string };
-  if (body.session) sessionStorage.setItem("jarvis-session", body.session);
-  return true;
+  if (!body.session) return "empty";
+  sessionStorage.setItem("jarvis-session", body.session);
+  return "ok";
+}
+
+export function authed(init: RequestInit = {}): RequestInit {
+  const headers = new Headers(init.headers);
+  const session = sessionStorage.getItem("jarvis-session");
+  if (session) headers.set("x-jarvis-session", session);
+  return { ...init, credentials: "include", headers };
 }
 
 function withSession(url: URL) {

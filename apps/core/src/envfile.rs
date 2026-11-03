@@ -4,6 +4,73 @@ use std::path::PathBuf;
 use crate::crypto::Identity;
 use crate::secrets::is_secret_name;
 
+pub fn load_dev_dotenv() -> BTreeMap<String, String> {
+    if std::env::var("JARVIS_DOCKER").ok().as_deref() == Some("1") {
+        return BTreeMap::new();
+    }
+    let Some(path) = find_dotenv() else {
+        return BTreeMap::new();
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return BTreeMap::new();
+    };
+    let values = parse(&text);
+    apply_gaps(&values);
+    tracing::info!(path = %path.display(), "dev .env jest źródłem zmiennych");
+    values
+}
+
+pub fn apply_dev_dotenv(values: &BTreeMap<String, String>) {
+    for (key, value) in values {
+        if value.is_empty() {
+            continue;
+        }
+        unsafe { std::env::set_var(key, value) };
+    }
+}
+
+fn find_dotenv() -> Option<PathBuf> {
+    let mut dir = std::env::current_dir().ok()?;
+    loop {
+        let candidate = dir.join(".env");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        if dir.join(".git").is_dir() {
+            return None;
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
+}
+
+fn parse(text: &str) -> BTreeMap<String, String> {
+    let mut values = BTreeMap::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=') {
+            values.insert(key.trim().to_string(), value.to_string());
+        }
+    }
+    values
+}
+
+fn apply_gaps(values: &BTreeMap<String, String>) {
+    for (key, value) in values {
+        if value.is_empty() {
+            continue;
+        }
+        let already = std::env::var(key).ok().filter(|set| !set.is_empty());
+        if already.is_none() {
+            unsafe { std::env::set_var(key, value) };
+        }
+    }
+}
+
 pub struct EnvFile {
     path: PathBuf,
     values: BTreeMap<String, String>,
@@ -20,15 +87,7 @@ impl EnvFile {
             } else {
                 String::from_utf8(bytes)?
             };
-            for line in text.lines() {
-                let line = line.trim();
-                if line.is_empty() || line.starts_with('#') {
-                    continue;
-                }
-                if let Some((key, value)) = line.split_once('=') {
-                    values.insert(key.trim().to_string(), value.to_string());
-                }
-            }
+            values = parse(&text);
         }
         let file = Self { path, values };
         file.apply();

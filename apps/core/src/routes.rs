@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, Query, State};
 use std::net::SocketAddr;
-use axum::http::{header, HeaderMap, Method, StatusCode};
+use axum::http::{header, HeaderMap, HeaderName, Method, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -31,7 +31,12 @@ pub fn router(app: App) -> Router {
                 .unwrap_or_else(|_| axum::http::HeaderValue::from_static("http://localhost:5173")),
         )
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION, header::COOKIE])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::COOKIE,
+            HeaderName::from_static("x-jarvis-session"),
+        ])
         .allow_credentials(true);
     Router::new()
         .route("/health", get(health))
@@ -86,6 +91,9 @@ async fn login(
     app.login_attempts.lock().await.remove(&key);
     let session = Uuid::new_v4().to_string();
     app.web_sessions.lock().await.insert(session.clone(), ());
+    if let Ok(conn) = app.db.connect() {
+        let _ = db::save_web_session(&conn, &hash_token(&session)).await;
+    }
     let secure = std::env::var("JARVIS_COOKIE_SECURE").ok().as_deref() == Some("1");
     let mut cookie = Cookie::build(("jarvis_session", session.clone()))
         .http_only(true)
@@ -96,7 +104,7 @@ async fn login(
             cookie::SameSite::Lax
         });
     if secure {
-        cookie = cookie.secure(true);
+        cookie = cookie.secure(true).partitioned(true);
     }
     (
         StatusCode::OK,
@@ -127,23 +135,20 @@ fn session_with(
         .unwrap_or("")
         .trim_start_matches("Bearer ")
         .to_string();
+    let header_session = headers
+        .get("x-jarvis-session")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
     async move {
-        if let Some(token) = query_session.as_deref() {
-            if !token.is_empty() && app.web_sessions.lock().await.contains_key(token) {
-                return true;
-            }
-        }
-        if let Ok(jar) = cookie::Cookie::parse(raw.split(';').next().unwrap_or("")) {
-            if jar.name() == "jarvis_session" && app.web_sessions.lock().await.contains_key(jar.value())
-            {
-                return true;
-            }
+        if token_live(&app, query_session.as_deref().unwrap_or("")).await
+            || token_live(&app, &header_session).await
+        {
+            return true;
         }
         for part in raw.split(';') {
             if let Ok(jar) = cookie::Cookie::parse(part.trim()) {
-                if jar.name() == "jarvis_session"
-                    && app.web_sessions.lock().await.contains_key(jar.value())
-                {
+                if jar.name() == "jarvis_session" && token_live(&app, jar.value()).await {
                     return true;
                 }
             }
@@ -165,6 +170,26 @@ fn session_with(
             return false;
         };
         rows.next().await.ok().flatten().is_some()
+    }
+}
+
+async fn token_live(app: &App, token: &str) -> bool {
+    if token.is_empty() {
+        return false;
+    }
+    if app.web_sessions.lock().await.contains_key(token) {
+        return true;
+    }
+    let hashed = hash_token(token);
+    let Ok(conn) = app.db.connect() else {
+        return false;
+    };
+    match db::web_session_exists(&conn, &hashed).await {
+        Ok(true) => {
+            app.web_sessions.lock().await.insert(token.to_string(), ());
+            true
+        }
+        _ => false,
     }
 }
 
@@ -254,6 +279,9 @@ async fn env_post(
             if let Ok(hash) = hash_password(value) {
                 *app.password_hash.lock().await = hash;
                 app.web_sessions.lock().await.clear();
+                if let Ok(conn) = app.db.connect() {
+                    let _ = db::clear_web_sessions(&conn).await;
+                }
             }
         }
     }

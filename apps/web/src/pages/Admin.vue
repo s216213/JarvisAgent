@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { apiBase, terminalSocket } from "../api";
+import { apiBase, authed, terminalSocket } from "../api";
 
 type Flag = { name: string; enabled: boolean; description?: string };
 type EnvVar = { name: string; secret: boolean; preview: string | null };
@@ -75,9 +75,9 @@ function readHost(value: unknown) {
 
 async function load() {
   const [flagRes, envRes, statusRes] = await Promise.all([
-    fetch(`${apiBase}/api/flags`, { credentials: "include" }),
-    fetch(`${apiBase}/api/env`, { credentials: "include" }),
-    fetch(`${apiBase}/api/status`, { credentials: "include" }),
+    fetch(`${apiBase}/api/flags`, authed()),
+    fetch(`${apiBase}/api/env`, authed()),
+    fetch(`${apiBase}/api/status`, authed()),
   ]);
   if (flagRes.status === 401) {
     router.push("/login");
@@ -87,7 +87,7 @@ async function load() {
   flags.value = flagJson.flags ?? [];
   vars.value = (await envRes.json()).vars ?? [];
   readStatus(await statusRes.json());
-  const hostRes = await fetch(`${apiBase}/api/host`, { credentials: "include" });
+  const hostRes = await fetch(`${apiBase}/api/host`, authed());
   readHost(await hostRes.json());
 }
 
@@ -109,17 +109,19 @@ function sendTerm() {
 }
 
 async function restart(service: string) {
-  await fetch(`${apiBase}/api/host`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ service }),
-  });
+  await fetch(
+    `${apiBase}/api/host`,
+    authed({
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ service }),
+    }),
+  );
   await load();
 }
 
 async function desktop() {
-  const response = await fetch(`${apiBase}/api/desktop`, { method: "POST", credentials: "include" });
+  const response = await fetch(`${apiBase}/api/desktop`, authed({ method: "POST" }));
   const text = await response.text();
   try {
     readHost(JSON.parse(text));
@@ -130,22 +132,26 @@ async function desktop() {
 
 async function toggle(flag: Flag) {
   flag.enabled = !flag.enabled;
-  await fetch(`${apiBase}/api/flags`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: flag.name, enabled: flag.enabled }),
-  });
+  await fetch(
+    `${apiBase}/api/flags`,
+    authed({
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: flag.name, enabled: flag.enabled }),
+    }),
+  );
 }
 
 async function saveEnv(remove = false) {
   error.value = "";
-  const response = await fetch(`${apiBase}/api/env`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: name.value, value: value.value, remove }),
-  });
+  const response = await fetch(
+    `${apiBase}/api/env`,
+    authed({
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: name.value, value: value.value, remove }),
+    }),
+  );
   if (!response.ok) {
     error.value = "Nie zapisuję tej zmiennej.";
     return;
@@ -157,6 +163,11 @@ async function saveEnv(remove = false) {
 onMounted(() => {
   if (!sessionStorage.getItem("jarvis-auth")) {
     router.push("/login");
+    return;
+  }
+  if (!sessionStorage.getItem("jarvis-session")) {
+    sessionStorage.removeItem("jarvis-auth");
+    router.push("/login?again=1");
     return;
   }
   load().catch(() => {

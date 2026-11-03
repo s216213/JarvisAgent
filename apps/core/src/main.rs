@@ -23,10 +23,12 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(EnvFilter::from_default_env().add_directive("jarvis_core=info".parse()?))
         .init();
 
+    let dev_env = envfile::load_dev_dotenv();
     let data = PathBuf::from(std::env::var("JARVIS_DATA").unwrap_or_else(|_| "data".into()));
     std::fs::create_dir_all(&data)?;
     let identity = Arc::new(crypto::Identity::load_or_create(&data.join("server.key"))?);
     let env = envfile::EnvFile::load(data.join("jarvis.env"), &identity)?;
+    envfile::apply_dev_dotenv(&dev_env);
     let db_path = PathBuf::from(
         std::env::var("JARVIS_DB").unwrap_or_else(|_| data.join("jarvis.db").display().to_string()),
     );

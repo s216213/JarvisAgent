@@ -96,7 +96,13 @@ function onMessage(raw: string) {
 }
 
 function send(payload: unknown) {
-  ws?.send(JSON.stringify(payload));
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+}
+
+function dropSession() {
+  sessionStorage.removeItem("jarvis-auth");
+  sessionStorage.removeItem("jarvis-session");
+  router.push("/login?again=1");
 }
 
 function submit() {
@@ -126,13 +132,25 @@ onMounted(() => {
     router.push("/login");
     return;
   }
+  if (!sessionStorage.getItem("jarvis-session")) {
+    dropSession();
+    return;
+  }
+  let opened = false;
   ws = socket("web-chat");
+  ws.onopen = () => {
+    opened = true;
+    sendHeartbeat();
+  };
   ws.onmessage = (message) => onMessage(String(message.data));
   ws.onerror = () => {
+    if (!opened) {
+      dropSession();
+      return;
+    }
     error.value = "Połączenie z rdzeniem nie działa.";
     state.value = "error";
   };
-  sendHeartbeat();
 });
 
 function sendHeartbeat() {
