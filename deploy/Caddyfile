@@ -1,3 +1,10 @@
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
 {$JARVIS_DOMAIN:localhost} {
+	header Alt-Svc clear
 	reverse_proxy core:8080
 }
