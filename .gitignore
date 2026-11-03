@@ -3,8 +3,11 @@
 !.env.example
 target/
 data/*.db
+data/*.db-wal
+data/*.db-shm
 data/*.key
 data/jarvis.env
+apps/core/data/
 node_modules/
 dist/
 apps/web/node_modules/
@@ -12,3 +15,11 @@ apps/web/dist/
 .DS_Store
 *.user
 .vs/
+
+# WinUI desktop
+apps/desktop/bin/
+apps/desktop/**/models/
+apps/desktop/obj/
+apps/desktop/AppPackages/
+apps/desktop/BundleArtifacts/
+apps/desktop/publish/

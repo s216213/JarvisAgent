@@ -16,6 +16,15 @@ type Widget = {
   zoom?: number;
 };
 type Card = { id: string; summary: string; body: string };
+type Hud = {
+  cpu: string;
+  ram: string;
+  battery: string;
+  network: string;
+  alert: string;
+  mission: string;
+  clock: string;
+};
 
 const stateLabel: Record<string, string> = {
   idle: "spoczynek",
@@ -32,11 +41,30 @@ const state = ref("empty");
 const widget = ref<Widget | null>(null);
 const card = ref<Card | null>(null);
 const error = ref("");
+const hud = ref<Hud>({
+  cpu: "—",
+  ram: "—",
+  battery: "—",
+  network: "—",
+  alert: "",
+  mission: "",
+  clock: clockText(),
+});
 const mapHost = ref<HTMLElement | null>(null);
 const transcript = ref<HTMLElement | null>(null);
 let map: maplibregl.Map | null = null;
 let ws: WebSocket | null = null;
 let buffer = "";
+let leave = false;
+let clockTimer = 0;
+
+function clockText() {
+  return new Date().toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+}
+
+function metric(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}%` : "—";
+}
 
 function paintMap(next: Widget) {
   nextTick(() => {
@@ -85,6 +113,17 @@ function onMessage(raw: string) {
     buffer = "";
     state.value = lines.value.length ? "idle" : "empty";
   }
+  if (event.type === "hud_state") {
+    hud.value = {
+      ...hud.value,
+      cpu: metric(event.cpu),
+      ram: metric(event.ram),
+      battery: metric(event.battery),
+      network: typeof event.network === "string" && event.network ? event.network : "—",
+      alert: typeof event.alert === "string" ? event.alert : "",
+      mission: typeof event.mission === "string" ? event.mission : "",
+    };
+  }
   if (event.type === "widget") {
     widget.value = event.widget;
     if (event.widget?.type === "map") paintMap(event.widget);
@@ -113,9 +152,11 @@ function submit() {
   draft.value = "";
   state.value = "working";
   stick();
-  if (text.toLowerCase() === "tak" && card.value) {
-    send({ type: "confirm", id: card.value.id, accept: true, via: "text" });
+  const word = text.toLowerCase();
+  if (card.value && (word === "tak" || word === "nie")) {
+    send({ type: "confirm", id: card.value.id, accept: word === "tak", via: "text" });
     card.value = null;
+    return;
   }
   send({ type: "user_text", text });
 }
@@ -151,6 +192,14 @@ onMounted(() => {
     error.value = "Połączenie z rdzeniem nie działa.";
     state.value = "error";
   };
+  ws.onclose = () => {
+    if (leave || !opened) return;
+    error.value = "Połączenie z rdzeniem nie działa.";
+    state.value = "error";
+  };
+  clockTimer = window.setInterval(() => {
+    hud.value.clock = clockText();
+  }, 1000);
 });
 
 function sendHeartbeat() {
@@ -163,6 +212,8 @@ function sendHeartbeat() {
 }
 
 onBeforeUnmount(() => {
+  leave = true;
+  window.clearInterval(clockTimer);
   map?.remove();
   ws?.close();
 });
@@ -173,12 +224,23 @@ onBeforeUnmount(() => {
     <header class="topbar">
       <span class="mark">Jarvis</span>
       <nav class="nav">
-        <a href="/" aria-current="page">Czat</a>
+        <a href="/">Pulpit</a>
+        <a href="/chat" aria-current="page">Czat</a>
+        <a href="/space">Przestrzeń</a>
         <a href="/admin">Admin</a>
       </nav>
       <span class="pill">{{ stateLabel[state] ?? state }}</span>
     </header>
     <div class="state-line"></div>
+    <section class="helmet" aria-label="Pasek hełmu">
+      <span class="accent">{{ hud.clock }}</span>
+      <span>CPU {{ hud.cpu }}</span>
+      <span>RAM {{ hud.ram }}</span>
+      <span>BAT {{ hud.battery }}</span>
+      <span>{{ hud.network }}</span>
+      <span v-if="hud.alert" class="warn">{{ hud.alert }}</span>
+      <span v-if="hud.mission" class="accent">{{ hud.mission }}</span>
+    </section>
     <div class="stage-body">
       <section class="frame transcript" ref="transcript">
         <p v-if="lines.length === 0" class="muted">Napisz tak, jakbyś mówił. Jarvis ma tu te same narzędzia co w głosie.</p>

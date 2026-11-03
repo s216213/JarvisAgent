@@ -1,12 +1,21 @@
+#![recursion_limit = "256"]
+
 mod agent;
+mod board;
+mod briefing;
 mod crypto;
 mod db;
 mod embed;
 mod envfile;
-mod llm;
+mod evolve;
 mod host;
+mod llm;
+mod mission;
+mod plugins;
 mod routes;
 mod secrets;
+mod selfmap;
+mod simulate;
 mod state;
 
 use std::path::PathBuf;
@@ -62,6 +71,15 @@ async fn main() -> anyhow::Result<()> {
         note_folder: Arc::new(tokio::sync::Mutex::new(None)),
         notices: Arc::new(tokio::sync::Mutex::new(Vec::new())),
         desk: Arc::new(tokio::sync::Mutex::new(None)),
+        pulse: Arc::new(tokio::sync::Mutex::new(Default::default())),
+        hud: Arc::new(tokio::sync::Mutex::new(Default::default())),
+        last_window: Arc::new(tokio::sync::Mutex::new(String::new())),
+        window_said: Arc::new(tokio::sync::Mutex::new(None)),
+        cpu_high: Arc::new(tokio::sync::Mutex::new(0)),
+        cpu_said: Arc::new(tokio::sync::Mutex::new(false)),
+        greeted_day: Arc::new(tokio::sync::Mutex::new(None)),
+        last_digest: Arc::new(tokio::sync::Mutex::new(String::new())),
+        mission_cancel: Arc::new(tokio::sync::Mutex::new(None)),
     };
 
     let scheduler = app.clone();

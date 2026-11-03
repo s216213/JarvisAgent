@@ -1,5 +1,6 @@
 package app.jarvis
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -32,10 +33,27 @@ import kotlin.concurrent.thread
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val lineState = mutableStateOf("Tekst na pasku, dopóki nie ma głosu.")
         val brain = Brain(this) { event ->
             val type = event.optString("type")
             if (type == "clipboard_set") {
                 brain.setClipboard(this, event.optString("text"))
+            }
+            val summary = when (type) {
+                "token" -> event.optString("text")
+                "space_scene" -> "Mapa siebie"
+                "widget" -> event.optJSONObject("widget")?.optString("title").orEmpty()
+                "hud_state" -> {
+                    val mission = event.optString("mission")
+                    val alert = event.optString("alert")
+                    if (mission.isNotEmpty()) mission else alert
+                }
+                else -> ""
+            }
+            if (summary.isNotEmpty()) {
+                val line = "$summary\n/space"
+                runOnUiThread { lineState.value = line }
+                HudService.show(line)
             }
         }
         val bg = Color(0xFF070B10)
@@ -57,7 +75,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 var api by remember { mutableStateOf("http://10.0.2.2:8080") }
                 var code by remember { mutableStateOf("") }
-                var lineText by remember { mutableStateOf("Tekst na pasku, dopóki nie ma Matchy.") }
+                val lineText by lineState
                 val fieldColors = TextFieldDefaults.colors(
                     focusedContainerColor = panel,
                     unfocusedContainerColor = panel,
@@ -96,7 +114,13 @@ class MainActivity : ComponentActivity() {
                             thread {
                                 brain.pair(api, code)
                                 brain.connect()
-                                lineText = "Sparowany."
+                                runOnUiThread {
+                                    lineState.value = "Sparowany.\n/space"
+                                    try {
+                                        startForegroundService(Intent(this, HudService::class.java))
+                                    } catch (_: Exception) {
+                                    }
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = bg),

@@ -56,17 +56,17 @@ impl Router {
         let chain = std::env::var("JARVIS_LLM_CHAIN").unwrap_or_else(|_| {
             "groq,gemini,openrouter,mistral,zai,cloudflare,sambanova,cohere".into()
         });
-        let mut last = String::from("brak providera");
-        let mut detail = None;
+        let mut errors = Vec::new();
         for name in chain.split(',').map(str::trim).filter(|s| !s.is_empty()) {
             if let Some(until) = self.open_until.lock().await.get(name).copied() {
                 if Instant::now() < until {
-                    last = format!("{name}: przerwa po 429");
+                    errors.push(format!("{name}: przerwa po 429"));
                     continue;
                 }
             }
             match self.one(name, system, user).await {
                 Ok(text) => {
+                    tracing::info!(provider = name, "model odpowiedział");
                     return Ok(Completion {
                         text,
                         provider: name.to_string(),
@@ -86,14 +86,16 @@ impl Router {
                             recent.remove(0);
                         }
                     }
-                    last = format!("{name}: {}", short(&msg));
-                    if !msg.contains("brak klucza") {
-                        detail = Some(last.clone());
-                    }
+                    errors.push(format!("{name}: {}", short(&msg)));
                 }
             }
         }
-        anyhow::bail!(detail.unwrap_or(last))
+        let report = if errors.is_empty() {
+            "brak providera".to_string()
+        } else {
+            errors.join(" | ")
+        };
+        anyhow::bail!(report)
     }
 
     pub async fn complete_vision(&self, prompt: &str, image_b64: &str, mime: &str) -> anyhow::Result<String> {
@@ -156,7 +158,7 @@ impl Router {
         }
         let mut last = String::from("brak modelu");
         let mut limited = false;
-        for model in models.into_iter().take(4) {
+        for model in models {
             match self.complete_with(provider, &model, system, user).await {
                 Ok(text) => {
                     self.promote(provider, &model).await;
@@ -165,18 +167,21 @@ impl Router {
                 Err(err) => {
                     let msg = err.to_string();
                     tracing::warn!(provider, %model, error = %short(&msg), "model odrzucony");
+                    if msg.starts_with("401") {
+                        anyhow::bail!(msg);
+                    }
                     if msg.contains("429") {
                         self.demote(provider, &model).await;
                         limited = true;
                         last = format!("{model}: 429");
                         continue;
                     }
-                    last = format!("{model}: {}", short(&msg));
-                    if !msg.starts_with("pomiń ") {
-                        anyhow::bail!(last);
-                    }
                     self.demote(provider, &model).await;
-                    last = msg.trim_start_matches("pomiń ").to_string();
+                    last = if let Some(rest) = msg.strip_prefix("pomiń ") {
+                        rest.to_string()
+                    } else {
+                        format!("{model}: {}", short(&msg))
+                    };
                 }
             }
         }
@@ -193,57 +198,54 @@ impl Router {
         system: &str,
         user: &str,
     ) -> anyhow::Result<String> {
+        let messages = json!([
+            {"role": "system", "content": system},
+            {"role": "user", "content": user}
+        ]);
         let (status, value) = match provider {
             "cloudflare" => {
                 let (token, account) = credentials(provider)?;
                 let url = format!(
                     "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}"
                 );
-                let response = self
-                    .http
-                    .post(url)
-                    .bearer_auth(token)
-                    .json(&json!({"messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user}
-                    ]}))
-                    .send()
-                    .await?;
-                (response.status(), response.json().await.unwrap_or(json!({})))
+                self.post_bearer(&url, &token, &json!({"messages": messages}))
+                    .await
+                    .map_err(|err| timeout_as_skip(model, err))?
             }
             "cohere" => {
                 let (key, _) = credentials(provider)?;
-                let response = self
-                    .http
-                    .post("https://api.cohere.com/v2/chat")
-                    .bearer_auth(key)
-                    .json(&json!({
-                        "model": model,
-                        "messages": [
-                            {"role": "system", "content": system},
-                            {"role": "user", "content": user}
-                        ]
-                    }))
-                    .send()
-                    .await?;
-                (response.status(), response.json().await.unwrap_or(json!({})))
+                self.post_bearer(
+                    "https://api.cohere.com/v2/chat",
+                    &key,
+                    &json!({"model": model, "messages": messages}),
+                )
+                .await
+                .map_err(|err| timeout_as_skip(model, err))?
             }
             _ => {
                 let (key, _) = credentials(provider)?;
-                let response = self
-                    .http
-                    .post(chat_url(provider)?)
-                    .bearer_auth(key)
-                    .json(&json!({
-                        "model": model,
-                        "messages": [
-                            {"role": "system", "content": system},
-                            {"role": "user", "content": user}
-                        ]
-                    }))
-                    .send()
-                    .await?;
-                (response.status(), response.json().await.unwrap_or(json!({})))
+                let url = chat_url(provider)?;
+                let mut body = json!({"model": model, "messages": messages});
+                if wants_low_reasoning(provider, model) {
+                    body["reasoning_effort"] = json!("low");
+                }
+                if provider == "groq" && model.contains("gpt-oss") {
+                    body["max_tokens"] = json!(2048);
+                }
+                let first = self
+                    .post_bearer(url, &key, &body)
+                    .await
+                    .map_err(|err| timeout_as_skip(model, err))?;
+                if first.0.as_u16() == 400 && body.get("reasoning_effort").is_some() {
+                    if let Some(object) = body.as_object_mut() {
+                        object.remove("reasoning_effort");
+                    }
+                    self.post_bearer(url, &key, &body)
+                        .await
+                        .map_err(|err| timeout_as_skip(model, err))?
+                } else {
+                    first
+                }
             }
         };
         if status.as_u16() == 429 {
@@ -251,37 +253,56 @@ impl Router {
         }
         if !status.is_success() {
             let body = value.to_string();
+            if auth_failure(status.as_u16(), &body) {
+                anyhow::bail!("401 {}", short(&body));
+            }
             if skippable(status.as_u16(), &body) {
                 anyhow::bail!("pomiń {model}: {}", short(&body));
             }
             anyhow::bail!(short(&body));
         }
-        let text = match provider {
-            "cloudflare" => value["result"]["response"].as_str().unwrap_or(""),
-            "cohere" => value["message"]["content"][0]["text"].as_str().unwrap_or(""),
-            _ => value["choices"][0]["message"]["content"].as_str().unwrap_or(""),
-        };
-        Ok(text.to_string())
+        let text = message_text(provider, &value);
+        if text.trim().is_empty() {
+            anyhow::bail!("pomiń {model}: pusta odpowiedź");
+        }
+        Ok(text)
+    }
+
+    async fn post_bearer(&self, url: &str, key: &str, body: &Value) -> anyhow::Result<(reqwest::StatusCode, Value)> {
+        let response = self
+            .http
+            .post(url)
+            .bearer_auth(key)
+            .timeout(Duration::from_secs(25))
+            .json(body)
+            .send()
+            .await?;
+        let status = response.status();
+        let value = response.json().await.unwrap_or(json!({}));
+        Ok((status, value))
     }
 
     async fn candidates(&self, provider: &str) -> Vec<String> {
         let mut models = Vec::new();
         if let Some(pinned) = optional_env(&format!("{}_MODEL", model_prefix(provider))) {
-            models.push(pinned);
+            push_model(&mut models, pinned);
+        }
+        for model in preferred(provider) {
+            push_model(&mut models, (*model).to_string());
         }
         for model in self.discovered(provider).await {
-            if !models.iter().any(|have| have == &model) {
-                models.push(model);
-            }
-            if models.len() == 4 {
+            push_model(&mut models, model);
+            if models.len() == 6 {
                 break;
             }
         }
-        if models.is_empty() {
-            fallback(provider)
-        } else {
-            models
+        for model in fallback(provider) {
+            if models.len() == 6 {
+                break;
+            }
+            push_model(&mut models, model);
         }
+        models
     }
 
     async fn discovered(&self, provider: &str) -> Vec<String> {
@@ -295,6 +316,7 @@ impl Router {
         }
         match self.fetch_catalog(provider).await {
             Ok(models) if !models.is_empty() => {
+                let models = order_models(provider, models);
                 self.catalog
                     .lock()
                     .await
@@ -333,7 +355,7 @@ impl Router {
         } else {
             self.http.get(catalog_url(provider)?).bearer_auth(key)
         };
-        let response = request.send().await?;
+        let response = request.timeout(Duration::from_secs(8)).send().await?;
         let status = response.status();
         let value: Value = response.json().await.unwrap_or(json!({}));
         if !status.is_success() {
@@ -462,8 +484,16 @@ fn catalog_url(provider: &str) -> anyhow::Result<&'static str> {
 
 fn fallback(provider: &str) -> Vec<String> {
     match provider {
-        "gemini" => vec!["gemini-3.8-flash".into(), "gemini-flash-latest".into()],
-        "groq" => vec!["llama-3.3-70b-versatile".into()],
+        "gemini" => vec![
+            "gemini-3.5-flash-lite".into(),
+            "gemini-3.8-flash".into(),
+            "gemini-flash-latest".into(),
+        ],
+        "groq" => vec![
+            "openai/gpt-oss-20b".into(),
+            "openai/gpt-oss-120b".into(),
+            "qwen/qwen3.8-27b".into(),
+        ],
         "openrouter" => vec!["openrouter/free".into()],
         "mistral" => vec!["mistral-small-latest".into()],
         "zai" => vec!["glm-4.5-flash".into()],
@@ -495,7 +525,7 @@ fn rank_models(value: &Value) -> Vec<String> {
         let Some(id) = model_id(item) else {
             continue;
         };
-        if !is_chat_model(item, &id) || !is_free_tier(item, &id) {
+        if !is_chat_model(item, &id) || !is_free_tier(item, &id) || retired(&id) {
             continue;
         }
         listed.push(Listed {
@@ -550,6 +580,7 @@ fn is_chat_model(item: &Value, id: &str) -> bool {
         "embed", "whisper", "tts", "transcrib", "moderation", "imagen", "veo", "aqa", "rerank",
         "guard", "clip", "audio", "speech", "lyria", "native-audio", "-image", "image-", "live",
         "deep-research", "antigravity", "robotics", "computer-use", "customtools", "nano-banana",
+        "orpheus", "preview", "safeguard",
     ];
     !SKIP.iter().any(|part| id.contains(part))
 }
@@ -621,10 +652,113 @@ fn skippable(status: u16, body: &str) -> bool {
         || body.contains("NOT_FOUND")
         || body.contains("no longer available")
         || body.contains("does not exist");
-    matches!(status, 400 | 402 | 404 | 408 | 409 | 410 | 500 | 502 | 503 | 529)
+    matches!(status, 400 | 402 | 403 | 404 | 408 | 409 | 410 | 422 | 500 | 502 | 503 | 529)
         || (status == 400 && about_model)
         || body.contains("UNAVAILABLE")
         || body.contains("model_not_found")
+}
+
+fn push_model(models: &mut Vec<String>, model: String) {
+    if !model.is_empty() && !models.iter().any(|have| have == &model) {
+        models.push(model);
+    }
+}
+
+fn timeout_as_skip(model: &str, err: anyhow::Error) -> anyhow::Error {
+    let timed = err
+        .downcast_ref::<reqwest::Error>()
+        .is_some_and(|error| error.is_timeout())
+        || err.to_string().to_ascii_lowercase().contains("timed out");
+    if timed {
+        anyhow::anyhow!("pomiń {model}: timeout")
+    } else {
+        err
+    }
+}
+
+fn wants_low_reasoning(provider: &str, model: &str) -> bool {
+    provider == "gemini" || (provider == "groq" && model.contains("gpt-oss"))
+}
+
+fn auth_failure(status: u16, body: &str) -> bool {
+    if status == 401 {
+        return true;
+    }
+    let body = body.to_ascii_lowercase();
+    body.contains("api key not valid")
+        || body.contains("invalid api key")
+        || body.contains("api_key_invalid")
+        || body.contains("invalid_api_key")
+}
+
+fn message_text(provider: &str, value: &Value) -> String {
+    match provider {
+        "cloudflare" => value["result"]["response"].as_str().unwrap_or("").to_string(),
+        "cohere" => value["message"]["content"][0]["text"].as_str().unwrap_or("").to_string(),
+        _ => openai_content(&value["choices"][0]["message"]),
+    }
+}
+
+fn openai_content(message: &Value) -> String {
+    let content = &message["content"];
+    if let Some(text) = content.as_str() {
+        if !text.trim().is_empty() {
+            return text.to_string();
+        }
+    }
+    if let Some(parts) = content.as_array() {
+        let mut out = String::new();
+        for part in parts {
+            if part["type"].as_str() == Some("reasoning") || part["thought"].as_bool() == Some(true) {
+                continue;
+            }
+            let Some(text) = part["text"].as_str().or_else(|| part["content"].as_str()) else {
+                continue;
+            };
+            if text.trim().is_empty() {
+                continue;
+            }
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            out.push_str(text);
+        }
+        if !out.trim().is_empty() {
+            return out;
+        }
+    }
+    message["reasoning"]
+        .as_str()
+        .or_else(|| message["reasoning_content"].as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string()
+}
+
+fn preferred(provider: &str) -> &'static [&'static str] {
+    match provider {
+        "groq" => &["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b"],
+        "gemini" => &["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"],
+        _ => &[],
+    }
+}
+
+fn retired(id: &str) -> bool {
+    matches!(
+        id,
+        "llama-3.3-70b-versatile"
+            | "llama-3.1-8b-instant"
+            | "llama3-70b-8192"
+            | "llama3-8b-8192"
+            | "llama-3.3-70b-specdec"
+    )
+}
+
+fn order_models(provider: &str, models: Vec<String>) -> Vec<String> {
+    let pref = preferred(provider);
+    let mut models: Vec<String> = models.into_iter().filter(|id| !retired(id)).collect();
+    models.sort_by_key(|id| pref.iter().position(|item| item == id).unwrap_or(10_000));
+    models
 }
 
 fn short(text: &str) -> String {
@@ -681,13 +815,55 @@ mod tests {
     fn created_timestamp_beats_an_older_name() {
         let value = json!({
             "data": [
-                {"id": "llama-3.1-8b", "created": 10},
-                {"id": "llama-3.3-70b-versatile", "created": 20},
+                {"id": "openai/gpt-oss-20b", "created": 10},
+                {"id": "openai/gpt-oss-120b", "created": 20},
                 {"id": "whisper-large", "created": 30}
             ]
         });
         let ranked = rank_models(&value);
-        assert_eq!(ranked, vec!["llama-3.3-70b-versatile", "llama-3.1-8b"]);
+        assert_eq!(ranked, vec!["openai/gpt-oss-120b", "openai/gpt-oss-20b"]);
+    }
+
+    #[test]
+    fn groq_catalog_leads_with_a_live_chat_model() {
+        let value = json!({
+            "data": [
+                {"id": "llama-3.3-70b-versatile", "created": 100},
+                {"id": "canopylabs/orpheus-v1-english", "created": 400},
+                {"id": "openai/gpt-oss-120b", "created": 200},
+                {"id": "openai/gpt-oss-20b", "created": 150},
+                {"id": "whisper-large-v3", "created": 500}
+            ]
+        });
+        let ranked = order_models("groq", rank_models(&value));
+        assert_eq!(ranked, vec!["openai/gpt-oss-20b", "openai/gpt-oss-120b"]);
+        let spare = fallback("groq");
+        assert!(spare.contains(&"openai/gpt-oss-20b".into()));
+        assert!(!spare.iter().any(|id| id.contains("llama-3.3")));
+    }
+
+    #[test]
+    fn gemini_lite_is_tried_before_flash() {
+        let models = order_models(
+            "gemini",
+            vec!["gemini-3.8-flash".into(), "gemini-3.5-flash-lite".into()],
+        );
+        assert_eq!(models[0], "gemini-3.5-flash-lite");
+    }
+
+    #[test]
+    fn thought_parts_do_not_hide_the_answer() {
+        let value = json!({
+            "choices": [{
+                "message": {
+                    "content": [
+                        {"type": "reasoning", "text": "najpierw myślę"},
+                        {"type": "text", "text": "odpowiedź"}
+                    ]
+                }
+            }]
+        });
+        assert_eq!(message_text("groq", &value), "odpowiedź");
     }
 }
 

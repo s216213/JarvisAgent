@@ -96,6 +96,9 @@ impl EnvFile {
 
     pub fn apply(&self) {
         for (key, value) in &self.values {
+            if value.is_empty() && std::env::var(key).ok().is_some_and(|set| !set.is_empty()) {
+                continue;
+            }
             unsafe { std::env::set_var(key, value) };
         }
     }

@@ -99,6 +99,14 @@ async fn migrate(conn: &Connection) -> anyhow::Result<()> {
             token_hash TEXT PRIMARY KEY,
             created INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS evolution (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            status TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            detail TEXT NOT NULL DEFAULT ''
+        );
         ",
     )
     .await?;
@@ -121,7 +129,7 @@ const FLAG_COPY: &[(&str, &str)] = &[
     ("palette", "Paleta Alt+Space: notatka, program, polecenie. Przełącznik jest zapisany; rdzeń go nie sprawdza."),
     ("clipboard", "Schowek idzie na pozostałe urządzenia. Tekst podobny do sekretu i tak zostaje."),
     ("telemetry", "Lokalizacja, bateria i stan maszyny przy obecności. Przełącznik jest zapisany; rdzeń go nie sprawdza."),
-    ("proactive", "Jarvis mówi, gdy bateria zejdzie poniżej progu."),
+    ("proactive", "Jarvis mówi o niskiej baterii, wysokim procesorze i zmianie okna. W trybie nauki milczy."),
     ("desktop_modes", "Przełączenie trybu pulpitu, także trybu nauki, w którym powiadomienia czekają."),
     ("shell", "Polecenie w powłoce. Najpierw karta zgody."),
     ("scripts", "Jednorazowy skrypt. Najpierw karta zgody."),
@@ -137,6 +145,13 @@ const FLAG_COPY: &[(&str, &str)] = &[
     ("health_guard", "Podnosi padniętą usługę Dockera, najwyżej trzy razy na godzinę."),
     ("log_analyzer", "Przy panic albo 500 zostawia propozycję poprawki w vaultcie. Liczy się tylko w takcie strażnika."),
     ("turso_sync", "Zgoda na sync pliku bazy. Sam adres Turso w env kopii nie uruchamia. Domyślnie wyłączona."),
+    ("plugins", "Narzędzia z katalogu plugins, ładowane bez przebudowy rdzenia."),
+    ("evolution", "Gdy brakuje narzędzia, Jarvis składa plugin albo propozycję kodu. Ryzykowne i rdzeń czekają na zgodę."),
+    ("simulation", "Przebieg próbny i scenariusz co-jeśli. Nic nie wykonuje."),
+    ("space", "Widok przestrzenny: hologram siebie i mapa świata."),
+    ("persona", "Ton lokaja: spokojnie, krótko, zwrot panie. Wyłączona zostawia krótki ton bez zwrotu."),
+    ("briefing", "Raport statusu i jedno powitanie dziennie, gdy ktoś siada przy pulpicie."),
+    ("missions", "Jedna misja w tle. Odczyt idzie od razu, powłoka czeka na zgodę."),
 ];
 
 pub fn flag_description(name: &str) -> &'static str {
@@ -170,6 +185,13 @@ async fn seed_flags(conn: &Connection) -> anyhow::Result<()> {
         ("health_guard", 1),
         ("log_analyzer", 1),
         ("turso_sync", 0),
+        ("plugins", 1),
+        ("evolution", 1),
+        ("simulation", 1),
+        ("space", 1),
+        ("persona", 1),
+        ("briefing", 1),
+        ("missions", 1),
     ];
     for (name, enabled) in flags {
         conn.execute(
@@ -252,6 +274,61 @@ pub async fn audit(conn: &Connection, kind: &str, detail: &str) -> anyhow::Resul
     )
     .await?;
     Ok(())
+}
+
+pub fn protected_flag(name: &str) -> bool {
+    matches!(name, "shell" | "scripts" | "evolution")
+}
+
+pub async fn record_evolution(
+    conn: &Connection,
+    kind: &str,
+    status: &str,
+    summary: &str,
+    detail: &str,
+) -> anyhow::Result<()> {
+    let now = chrono::Utc::now().timestamp();
+    let detail: String = detail.chars().take(8000).collect();
+    conn.execute(
+        "INSERT INTO evolution (created, kind, status, summary, detail) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![now, kind, status, summary, detail.as_str()],
+    )
+    .await?;
+    Ok(())
+}
+
+pub async fn list_evolution(conn: &Connection, limit: i64) -> anyhow::Result<Vec<(i64, String, String, String)>> {
+    let mut rows = conn
+        .query(
+            "SELECT created, kind, status, summary FROM evolution ORDER BY id DESC LIMIT ?1",
+            params![limit],
+        )
+        .await?;
+    let mut out = Vec::new();
+    while let Some(row) = rows.next().await? {
+        let created: i64 = row.get(0)?;
+        let kind: String = row.get(1)?;
+        let status: String = row.get(2)?;
+        let summary: String = row.get(3)?;
+        out.push((created, kind, status, summary));
+    }
+    Ok(out)
+}
+
+pub async fn count_rows(conn: &Connection, table: &str) -> anyhow::Result<i64> {
+    let sql = match table {
+        "chunks" => "SELECT COUNT(*) FROM chunks",
+        "facts" => "SELECT COUNT(*) FROM facts",
+        "edges" => "SELECT COUNT(*) FROM edges",
+        "messages" => "SELECT COUNT(*) FROM messages",
+        _ => return Ok(0),
+    };
+    let mut rows = conn.query(sql, ()).await?;
+    if let Some(row) = rows.next().await? {
+        let count: i64 = row.get(0)?;
+        return Ok(count);
+    }
+    Ok(0)
 }
 
 pub async fn recent_audit(conn: &Connection, limit: i64) -> anyhow::Result<Vec<String>> {

@@ -10,6 +10,7 @@
             <SolidColorBrush x:Key="Text" Color="#E7F6FF" />
             <SolidColorBrush x:Key="Muted" Color="#8AA0B2" />
             <SolidColorBrush x:Key="Warn" Color="#E8A54B" />
+            <SolidColorBrush x:Key="Danger" Color="#FF6B6B" />
             <SolidColorBrush x:Key="Line" Color="#1E3344" />
         </ResourceDictionary>
     </Application.Resources>

@@ -11,6 +11,10 @@
             </Grid.ColumnDefinitions>
             <Border Grid.Column="0" Background="#7FDBFF" />
             <StackPanel Grid.Column="1" Spacing="8" Margin="16,0,0,0">
+                <TextBlock x:Name="Clock" Foreground="#7FDBFF" FontFamily="Consolas" FontSize="13" Text="00:00" />
+                <TextBlock x:Name="Vitals" Foreground="#8AA0B2" FontFamily="Consolas" FontSize="13" Text="CPU —   RAM —   BAT —" TextWrapping="Wrap" />
+                <TextBlock x:Name="Alert" Foreground="#E8A54B" FontFamily="Consolas" FontSize="13" TextWrapping="Wrap" Visibility="Collapsed" />
+                <TextBlock x:Name="Mission" Foreground="#7FDBFF" FontFamily="Consolas" FontSize="13" TextWrapping="Wrap" Visibility="Collapsed" />
                 <TextBlock x:Name="Status" Foreground="#8AA0B2" FontFamily="Consolas" FontSize="13" Text="cisza" />
                 <TextBlock x:Name="Line" Foreground="#E7F6FF" FontSize="18" TextWrapping="Wrap" />
                 <StackPanel x:Name="Consent" Orientation="Horizontal" Visibility="Collapsed" Spacing="8">

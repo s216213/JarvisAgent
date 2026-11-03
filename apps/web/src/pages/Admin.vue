@@ -36,6 +36,11 @@ let termSocket: WebSocket | null = null;
 const name = ref("");
 const value = ref("");
 const error = ref("");
+type PluginRow = { id: string; description: string; capabilities: string[]; trust: string; enabled: boolean };
+type ProposalRow = { id: string; kind: string; summary: string; status: string; branch?: string };
+const plugins = ref<PluginRow[]>([]);
+const proposals = ref<ProposalRow[]>([]);
+const proposalNote = ref("");
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
@@ -89,6 +94,41 @@ async function load() {
   readStatus(await statusRes.json());
   const hostRes = await fetch(`${apiBase}/api/host`, authed());
   readHost(await hostRes.json());
+  const pluginRes = await fetch(`${apiBase}/api/plugins`, authed());
+  plugins.value = (await pluginRes.json()).plugins ?? [];
+  const proposalRes = await fetch(`${apiBase}/api/proposals`, authed());
+  proposals.value = (await proposalRes.json()).proposals ?? [];
+}
+
+async function pluginAction(id: string, body: Record<string, unknown>) {
+  await fetch(
+    `${apiBase}/api/plugins`,
+    authed({
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, ...body }),
+    }),
+  );
+  await load();
+}
+
+async function proposalAction(id: string, action: string, target?: string) {
+  proposalNote.value = "";
+  const response = await fetch(
+    `${apiBase}/api/proposals`,
+    authed({
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, action, target }),
+    }),
+  );
+  const text = await response.text();
+  try {
+    proposalNote.value = JSON.parse(text).text ?? text;
+  } catch {
+    proposalNote.value = text;
+  }
+  await load();
 }
 
 function openTerm() {
@@ -181,7 +221,9 @@ onMounted(() => {
     <header class="topbar">
       <span class="mark">Jarvis</span>
       <nav class="nav">
-        <a href="/">Czat</a>
+        <a href="/">Pulpit</a>
+        <a href="/chat">Czat</a>
+        <a href="/space">Przestrzeń</a>
         <a href="/admin" aria-current="page">Admin</a>
       </nav>
     </header>
@@ -258,6 +300,38 @@ onMounted(() => {
           <button @click="restart('searxng')">Restart SearXNG</button>
           <button @click="desktop">Pulpit, gdy starczy RAM</button>
         </div>
+      </section>
+      <section class="frame wide">
+        <h2>Pluginy</h2>
+        <p v-if="plugins.length === 0" class="muted">Brak pluginów w katalogu na OCI.</p>
+        <article class="flag" v-for="plugin in plugins" :key="plugin.id">
+          <div class="row">
+            <button :class="{ on: plugin.enabled }" @click="pluginAction(plugin.id, { enabled: !plugin.enabled })">{{ plugin.enabled ? "włączony" : "wyłączony" }}</button>
+            <button class="danger" @click="pluginAction(plugin.id, { remove: true })">Usuń</button>
+          </div>
+          <div>
+            <p class="mono">{{ plugin.id }}</p>
+            <p class="muted">{{ plugin.description }} · {{ plugin.capabilities.join(", ") }} · {{ plugin.trust }}</p>
+          </div>
+        </article>
+      </section>
+      <section class="frame wide">
+        <h2>Propozycje</h2>
+        <p v-if="proposals.length === 0" class="muted">Brak propozycji kodu.</p>
+        <article class="flag" v-for="item in proposals" :key="item.id">
+          <div>
+            <p class="mono">{{ item.id }} · {{ item.status }}</p>
+            <p class="muted">{{ item.summary }}</p>
+            <div class="row">
+              <button @click="proposalAction(item.id, 'apply', 'oci')">OCI</button>
+              <button @click="proposalAction(item.id, 'apply', 'pc')">Komputer</button>
+              <button @click="proposalAction(item.id, 'apply', 'both')">Oba</button>
+              <button @click="proposalAction(item.id, 'build')">Zbuduj</button>
+              <button @click="proposalAction(item.id, 'push')">Wypchnij</button>
+            </div>
+          </div>
+        </article>
+        <p v-if="proposalNote" class="muted">{{ proposalNote }}</p>
       </section>
       <section class="frame wide">
         <h2>Terminal</h2>

@@ -87,6 +87,105 @@
         "title": { "type": "string" },
         "body": { "type": "string" }
       }
+    },
+    {
+      "type": "object",
+      "required": ["type", "nodes"],
+      "properties": {
+        "type": { "const": "space_scene" },
+        "nodes": { "type": "array" },
+        "edges": { "type": "array" },
+        "ghost": { "type": "array" },
+        "map": { "type": "object" },
+        "text": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "body"],
+      "properties": {
+        "type": { "const": "apply_patch" },
+        "id": { "type": "string" },
+        "summary": { "type": "string" },
+        "body": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "done" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "run" },
+        "id": { "type": "string" },
+        "command": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "capture" },
+        "id": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "id", "output"],
+      "properties": {
+        "type": { "const": "tool_result" },
+        "id": { "type": "string" },
+        "output": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "clipboard" },
+        "text": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "clipboard_set" },
+        "text": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "desktop_mode" },
+        "name": { "type": "string" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "board" }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "const": "hud_state" },
+        "cpu": { "type": ["number", "null"] },
+        "ram": { "type": ["number", "null"] },
+        "battery": { "type": ["number", "null"] },
+        "network": { "type": "string" },
+        "alert": { "type": "string" },
+        "mission": { "type": "string" }
+      }
     }
   ]
 }

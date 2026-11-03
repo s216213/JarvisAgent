@@ -16,7 +16,10 @@ use turso::params;
 use uuid::Uuid;
 
 use crate::agent::{self, handle_text};
+use crate::evolve;
 use crate::host;
+use crate::plugins;
+use crate::selfmap;
 use crate::crypto::hash_token;
 use crate::db;
 use crate::secrets::{hash_password, is_secret_name, verify_password};
@@ -42,8 +45,12 @@ pub fn router(app: App) -> Router {
         .route("/health", get(health))
         .route("/api/login", post(login))
         .route("/api/flags", get(flags_get).post(flags_post))
+        .route("/api/plugins", get(plugins_get).post(plugins_post))
+        .route("/api/selfmap", get(selfmap_get))
+        .route("/api/proposals", get(proposals_get).post(proposals_post))
         .route("/api/env", get(env_get).post(env_post))
         .route("/api/status", get(status))
+        .route("/api/board", get(board_get))
         .route("/api/host", get(host_get).post(host_post))
         .route("/api/desktop", post(desktop_post))
         .route("/api/pair", post(pair))
@@ -238,6 +245,113 @@ async fn flags_post(
     StatusCode::OK.into_response()
 }
 
+async fn plugins_get(State(app): State<App>, headers: HeaderMap) -> impl IntoResponse {
+    if !session_ok(&app, &headers).await {
+        return (StatusCode::UNAUTHORIZED, "brak sesji").into_response();
+    }
+    let body = plugins::list()
+        .into_iter()
+        .map(|plugin| {
+            json!({
+                "id": plugin.id,
+                "description": plugin.description,
+                "capabilities": plugin.capabilities,
+                "trust": plugin.trust,
+                "enabled": plugin.enabled,
+            })
+        })
+        .collect::<Vec<_>>();
+    Json(json!({"plugins": body})).into_response()
+}
+
+#[derive(Deserialize)]
+struct PluginBody {
+    id: Option<String>,
+    enabled: Option<bool>,
+    remove: Option<bool>,
+    reload: Option<bool>,
+}
+
+async fn plugins_post(
+    State(app): State<App>,
+    headers: HeaderMap,
+    Json(body): Json<PluginBody>,
+) -> impl IntoResponse {
+    if !session_ok(&app, &headers).await {
+        return (StatusCode::UNAUTHORIZED, "brak sesji").into_response();
+    }
+    if body.reload.unwrap_or(false) {
+        return Json(json!({"plugins": plugins::list().len()})).into_response();
+    }
+    let Some(id) = body.id else {
+        return (StatusCode::BAD_REQUEST, "brak id").into_response();
+    };
+    let result = if body.remove.unwrap_or(false) {
+        plugins::remove(&id)
+    } else if let Some(enabled) = body.enabled {
+        plugins::set_enabled(&id, enabled)
+    } else {
+        Err("Podaj enabled albo remove.".into())
+    };
+    match result {
+        Ok(()) => {
+            if let Ok(conn) = app.db.connect() {
+                let _ = db::audit(&conn, "plugin", &id).await;
+            }
+            crate::board::publish(&app).await;
+            StatusCode::OK.into_response()
+        }
+        Err(err) => (StatusCode::BAD_REQUEST, err).into_response(),
+    }
+}
+
+async fn selfmap_get(State(app): State<App>, headers: HeaderMap) -> impl IntoResponse {
+    if !session_ok(&app, &headers).await {
+        return (StatusCode::UNAUTHORIZED, "brak sesji").into_response();
+    }
+    match selfmap::scene(&app).await {
+        Ok(scene) => Json(scene).into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    }
+}
+
+async fn proposals_get(State(app): State<App>, headers: HeaderMap) -> impl IntoResponse {
+    if !session_ok(&app, &headers).await {
+        return (StatusCode::UNAUTHORIZED, "brak sesji").into_response();
+    }
+    Json(json!({"proposals": evolve::list_proposals()})).into_response()
+}
+
+#[derive(Deserialize)]
+struct ProposalBody {
+    id: String,
+    action: String,
+    target: Option<String>,
+}
+
+async fn proposals_post(
+    State(app): State<App>,
+    headers: HeaderMap,
+    Json(body): Json<ProposalBody>,
+) -> impl IntoResponse {
+    if !session_ok(&app, &headers).await {
+        return (StatusCode::UNAUTHORIZED, "brak sesji").into_response();
+    }
+    let result = match body.action.as_str() {
+        "apply" => evolve::apply(&app, &body.id, body.target.as_deref().unwrap_or("oci")).await,
+        "build" => evolve::build(&app, &body.id).await,
+        "push" => evolve::push(&app, &body.id).await,
+        _ => Ok("Nie znam tej akcji.".into()),
+    };
+    match result {
+        Ok(text) => {
+            crate::board::publish(&app).await;
+            Json(json!({"text": text})).into_response()
+        }
+        Err(err) => (StatusCode::BAD_REQUEST, err.to_string()).into_response(),
+    }
+}
+
 async fn env_get(State(app): State<App>, headers: HeaderMap) -> impl IntoResponse {
     if !session_ok(&app, &headers).await {
         return (StatusCode::UNAUTHORIZED, "brak sesji").into_response();
@@ -291,6 +405,13 @@ async fn env_post(
         let _ = db::audit(&conn, "env", &label).await;
     }
     StatusCode::OK.into_response()
+}
+
+async fn board_get(State(app): State<App>, headers: HeaderMap) -> impl IntoResponse {
+    if !session_ok(&app, &headers).await {
+        return (StatusCode::UNAUTHORIZED, "brak sesji").into_response();
+    }
+    Json(crate::board::snapshot(&app).await).into_response()
 }
 
 async fn status(State(app): State<App>, headers: HeaderMap) -> impl IntoResponse {
@@ -473,6 +594,7 @@ async fn client_loop(app: App, device_id: String, mut socket: WebSocket) {
             )
             .await;
     }
+    crate::board::publish(&app).await;
     loop {
         tokio::select! {
             incoming = socket.recv() => {

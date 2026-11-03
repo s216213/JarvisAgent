@@ -13,6 +13,16 @@ import android.widget.TextView
 class HudService : Service() {
     private var label: TextView? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        current = this
+    }
+
+    override fun onDestroy() {
+        if (current === this) current = null
+        super.onDestroy()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -54,5 +64,14 @@ class HudService : Service() {
             getSystemService(WindowManager::class.java).addView(bar, params)
         }
         return START_STICKY
+    }
+
+    companion object {
+        private var current: HudService? = null
+
+        fun show(text: String) {
+            val view = current?.label ?: return
+            view.post { view.text = text }
+        }
     }
 }

@@ -51,6 +51,8 @@ curl -fsS https://jarvis.twoja-domena.pl/health
 
 Odpowiedź `ok` znaczy, że Caddy doszedł do rdzenia. Wolumen `jarvis-data` trzyma `jarvis.db`, `server.key`, `jarvis.env` i vault. Katalog startowy terminala w panelu to `/app`.
 
+Jarvis zapisuje własny kod na VM w klonie, z którego wstał stos. Kontener dostaje ten katalog pod tą samą ścieżką (`JARVIS_REPO`, domyślnie `/home/ubuntu/JarvisAgent`). Jeśli klon leży gdzie indziej, ustaw `JARVIS_REPO` w `.env` na istniejący katalog, inaczej `docker compose` nie wstanie. Gałąź `jarvis/…` zostaje lokalnie, dopóki sam nie powiesz „wypchnij”. `main` nie jest ruszany.
+
 Pulpit OCI nie startuje razem ze stosem. W `/admin` przycisk pulpitu woła profil `desktop` tylko wtedy, gdy na VM zostaje co najmniej 1,5 GB wolnego RAM. VNC słucha wtedy na `127.0.0.1:6080`.
 
 Strażnik, gdy ma sprawdzać publiczną nazwę, dostaje `JARVIS_PUBLIC_HOST`. To może być ten sam host co Caddy albo nazwa tunelu Cloudflare albo DuckDNS.
@@ -122,7 +124,7 @@ Wynik to niepakowany program `JarvisDesktop.exe`. Modele głosu kładziesz obok 
 
 Gdy któregoś pliku nie ma, pasek zostaje przy tekście.
 
-W oknie programu wpisujesz adres API, na przykład `https://jarvis.twoja-domena.pl`, i kod z `JARVIS_PAIR_CODE`. Sparowanie zapisuje token urządzenia przez DPAPI. Identyfikator tego komputera to `desktop-pc`.
+Program sam łączy się z `https://gawr-jarvis.duckdns.org`. Przy pierwszym uruchomieniu wpisujesz kod z `JARVIS_PAIR_CODE`. Token zostaje zaszyfrowany przez DPAPI, więc kolejne starty nie pytają o kod. Identyfikator tego komputera to `desktop-pc`.
 
 ## Android
 

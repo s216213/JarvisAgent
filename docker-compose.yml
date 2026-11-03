@@ -11,6 +11,7 @@ services:
       JARVIS_DOCKER: "1"
       SEARXNG_URL: http://searxng:8080
       JARVIS_DEPLOY: /app
+      JARVIS_REPO: ${JARVIS_REPO:-/home/ubuntu/JarvisAgent}
       JARVIS_WEB_ORIGIN: ${JARVIS_WEB_ORIGIN:-http://localhost:5173}
       JARVIS_COOKIE_SECURE: ${JARVIS_COOKIE_SECURE:-0}
       JARVIS_WEB_PASSWORD: ${JARVIS_WEB_PASSWORD:-}
@@ -27,6 +28,7 @@ services:
     volumes:
       - jarvis-data:/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${JARVIS_REPO:-/home/ubuntu/JarvisAgent}:${JARVIS_REPO:-/home/ubuntu/JarvisAgent}
     restart: unless-stopped
 
   caddy:

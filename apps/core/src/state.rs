@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -10,6 +11,20 @@ use crate::llm::Router;
 use turso::Database;
 
 pub type Outbound = mpsc::UnboundedSender<String>;
+
+#[derive(Clone, Debug, Default)]
+pub struct Pulse {
+    pub cpu: Option<f64>,
+    pub ram: Option<f64>,
+    pub battery: Option<f64>,
+    pub network: String,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Hud {
+    pub alert: String,
+    pub mission: String,
+}
 
 #[derive(Clone)]
 pub struct App {
@@ -31,6 +46,15 @@ pub struct App {
     pub note_folder: Arc<Mutex<Option<String>>>,
     pub notices: Arc<Mutex<Vec<String>>>,
     pub desk: Arc<Mutex<Option<(f64, f64)>>>,
+    pub pulse: Arc<Mutex<Pulse>>,
+    pub hud: Arc<Mutex<Hud>>,
+    pub last_window: Arc<Mutex<String>>,
+    pub window_said: Arc<Mutex<Option<Instant>>>,
+    pub cpu_high: Arc<Mutex<u8>>,
+    pub cpu_said: Arc<Mutex<bool>>,
+    pub greeted_day: Arc<Mutex<Option<String>>>,
+    pub last_digest: Arc<Mutex<String>>,
+    pub mission_cancel: Arc<Mutex<Option<Arc<AtomicBool>>>>,
 }
 
 impl App {
@@ -65,5 +89,34 @@ impl App {
         if let Ok(conn) = self.db.connect() {
             let _ = crate::db::audit(&conn, "push", text).await;
         }
+    }
+
+    pub async fn publish_hud(&self) {
+        let pulse = self.pulse.lock().await.clone();
+        let hud = self.hud.lock().await.clone();
+        let message = serde_json::json!({
+            "type": "hud_state",
+            "cpu": pulse.cpu,
+            "ram": pulse.ram,
+            "battery": pulse.battery,
+            "network": pulse.network,
+            "alert": hud.alert,
+            "mission": hud.mission,
+        });
+        let clients = self.clients.lock().await;
+        let text = message.to_string();
+        for tx in clients.values() {
+            let _ = tx.send(text.clone());
+        }
+    }
+
+    pub async fn set_alert(&self, text: &str) {
+        self.hud.lock().await.alert = text.to_string();
+        self.publish_hud().await;
+    }
+
+    pub async fn set_mission(&self, text: &str) {
+        self.hud.lock().await.mission = text.to_string();
+        self.publish_hud().await;
     }
 }

@@ -2,35 +2,211 @@
     x:Class="JarvisDesktop.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:JarvisDesktop"
     Title="Jarvis">
     <Grid Background="{StaticResource Bg}" RequestedTheme="Dark">
+        <Grid.Resources>
+            <Style x:Key="Label" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource Muted}" />
+                <Setter Property="FontFamily" Value="Consolas" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="Value" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource Text}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+        </Grid.Resources>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="48" />
             <RowDefinition Height="2" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <TextBlock Grid.Row="0" Text="Jarvis" Margin="24,16,24,16" Foreground="{StaticResource Accent}" FontFamily="Consolas" FontSize="13" />
-        <Border Grid.Row="1" Background="{StaticResource Line}" />
-        <ScrollViewer Grid.Row="2" Padding="24,16,24,24">
-            <StackPanel Spacing="16" MaxWidth="640" HorizontalAlignment="Left">
-                <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
-                    <StackPanel Spacing="16">
-                        <TextBlock Text="Parowanie" Foreground="{StaticResource Text}" FontSize="18" />
-                        <TextBlock x:Name="VoiceStatus" Foreground="{StaticResource Muted}" FontFamily="Consolas" FontSize="13" />
-                        <TextBox x:Name="Api" Text="http://localhost:8080" Background="{StaticResource Panel}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line}" Padding="12,8" />
-                        <TextBox x:Name="Code" PlaceholderText="Kod parowania" Background="{StaticResource Panel}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line}" Padding="12,8" />
-                        <Button Content="Sparuj ten komputer" Click="Pair" HorizontalAlignment="Left" Background="{StaticResource Accent}" Foreground="{StaticResource Bg}" BorderThickness="0" Padding="16,8" />
-                        <TextBlock x:Name="Hint" Foreground="{StaticResource Text}" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Border>
-                <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
-                    <StackPanel Spacing="16">
-                        <TextBlock Text="Paleta" Foreground="{StaticResource Text}" FontSize="18" />
-                        <TextBox x:Name="Palette" PlaceholderText="Alt+Space: notatka, program, polecenie" KeyDown="PaletteKey" Background="{StaticResource Panel}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line}" Padding="12,8" />
-                        <TextBlock x:Name="Log" Foreground="{StaticResource Muted}" FontFamily="Consolas" FontSize="13" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Border>
+
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Padding="20,0,160,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="JARVIS" VerticalAlignment="Center" FontFamily="Consolas" FontSize="13" Foreground="{StaticResource Accent}" CharacterSpacing="160" />
+            <TextBlock x:Name="HostText" Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center" FontFamily="Consolas" FontSize="13" Foreground="{StaticResource Muted}" />
+            <ProgressRing x:Name="Busy" Grid.Column="2" Width="16" Height="16" Margin="0,0,12,0" Foreground="{StaticResource Accent}" IsActive="False" Visibility="Collapsed" />
+            <Border x:Name="Pill" Grid.Column="3" VerticalAlignment="Center" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="12,6">
+                <TextBlock x:Name="PillText" Text="…" FontFamily="Consolas" FontSize="13" Foreground="{StaticResource Muted}" />
+            </Border>
+        </Grid>
+        <Border x:Name="StateLine" Grid.Row="1" Background="{StaticResource Line}" />
+
+        <Grid x:Name="Stage" Grid.Row="2" Padding="16,12,16,16" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="160" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="180" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="300" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Row="0" Grid.Column="0" Spacing="8" Margin="0,0,12,0">
+                <TextBlock Text="COMMAND" Style="{StaticResource Label}" CharacterSpacing="80" />
+                <TextBlock Text="AI Core" Style="{StaticResource Value}" />
+                <TextBlock Text="Agents" Style="{StaticResource Value}" />
+                <TextBlock Text="Tasks" Style="{StaticResource Value}" />
+                <TextBlock Text="Calendar" Style="{StaticResource Value}" />
+                <TextBlock Text="Memory" Style="{StaticResource Value}" />
+                <TextBlock Text="Tools" Style="{StaticResource Value}" />
+                <Button x:Name="SpaceButton" Content="Przestrzeń" Click="OpenSpace" HorizontalAlignment="Stretch" Background="Transparent" Foreground="{StaticResource Accent}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="16,8" CornerRadius="12" />
+                <Button x:Name="ForgetButton" Content="Sparuj ponownie" Click="ForgetClick" HorizontalAlignment="Stretch" Background="Transparent" Foreground="{StaticResource Muted}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="16,8" CornerRadius="12" />
             </StackPanel>
-        </ScrollViewer>
+
+            <ScrollViewer Grid.Row="0" Grid.Column="1" VerticalScrollBarVisibility="Auto" Margin="0,0,12,0">
+                <StackPanel Spacing="12">
+                    <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="AI CORE" Style="{StaticResource Label}" CharacterSpacing="80" />
+                            <TextBlock x:Name="CoreText" Style="{StaticResource Value}" Text="Czekam na mapę siebie." />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="AGENTS" Style="{StaticResource Label}" CharacterSpacing="80" />
+                            <TextBlock x:Name="AgentsText" Style="{StaticResource Value}" FontFamily="Consolas" FontSize="13" Text="Brak kart." />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="TASKS" Style="{StaticResource Label}" CharacterSpacing="80" />
+                            <TextBlock x:Name="TasksText" Style="{StaticResource Value}" FontFamily="Consolas" FontSize="13" Text="Zero zadań." />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="TIMELINE" Style="{StaticResource Label}" CharacterSpacing="80" />
+                            <TextBlock x:Name="TimelineText" Style="{StaticResource Value}" FontFamily="Consolas" FontSize="13" Text="Brak harmonogramu." />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="MEMORY" Style="{StaticResource Label}" CharacterSpacing="80" />
+                            <TextBlock x:Name="MemoryText" Style="{StaticResource Value}" FontFamily="Consolas" FontSize="13" Text="Zero notatek i faktów." />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="LLM" Style="{StaticResource Label}" CharacterSpacing="80" />
+                            <TextBlock x:Name="LlmText" Style="{StaticResource Value}" FontFamily="Consolas" FontSize="13" Text="—" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <ScrollViewer Grid.Row="0" Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="12">
+                    <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="LIVE FEED" Style="{StaticResource Label}" CharacterSpacing="80" />
+                            <TextBlock x:Name="FeedText" Style="{StaticResource Value}" FontFamily="Consolas" FontSize="13" Text="Pusto." />
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="TEN KOMPUTER" Style="{StaticResource Label}" CharacterSpacing="80" />
+                            <TextBlock x:Name="DetailText" Style="{StaticResource Value}" Text="—" />
+                            <TextBlock Text="Głos" Style="{StaticResource Label}" />
+                            <TextBlock x:Name="VoiceText" Style="{StaticResource Value}" Text="—" />
+                            <TextBlock Text="Okno" Style="{StaticResource Label}" />
+                            <TextBlock x:Name="FocusText" Style="{StaticResource Value}" Text="—" />
+                            <TextBlock Text="Tryb" Style="{StaticResource Label}" />
+                            <TextBlock x:Name="ModeText" Style="{StaticResource Value}" Text="—" />
+                            <TextBlock Text="Procesor" Style="{StaticResource Label}" />
+                            <TextBlock x:Name="CpuText" Style="{StaticResource Value}" Text="—" />
+                            <TextBlock Text="Pamięć hosta" Style="{StaticResource Label}" />
+                            <TextBlock x:Name="RamText" Style="{StaticResource Value}" Text="—" />
+                            <TextBlock Text="Bateria" Style="{StaticResource Label}" />
+                            <TextBlock x:Name="BatteryText" Style="{StaticResource Value}" Text="—" />
+                            <TextBlock Text="Sieć" Style="{StaticResource Label}" />
+                            <TextBlock x:Name="NetText" Style="{StaticResource Value}" Text="—" />
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="WidgetCard" Visibility="Collapsed" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock x:Name="WidgetTitle" Style="{StaticResource Label}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="WidgetBody" Style="{StaticResource Value}" FontSize="15" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Border x:Name="ConsentPanel" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Visibility="Collapsed" Margin="0,12,0,0" Background="{StaticResource Panel}" BorderBrush="{StaticResource Warn}" BorderThickness="1" CornerRadius="12" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock x:Name="ConsentSummary" TextWrapping="Wrap" Foreground="{StaticResource Text}" FontSize="16" />
+                    <ScrollViewer MaxHeight="120">
+                        <TextBlock x:Name="ConsentBody" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13" Foreground="{StaticResource Warn}" IsTextSelectionEnabled="True" />
+                    </ScrollViewer>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Tak" Click="AcceptClick" Background="Transparent" Foreground="{StaticResource Warn}" BorderBrush="{StaticResource Warn}" BorderThickness="1" Padding="16,8" CornerRadius="12" />
+                        <Button Content="Nie" Click="RejectClick" Background="Transparent" Foreground="{StaticResource Danger}" BorderBrush="{StaticResource Danger}" BorderThickness="1" Padding="16,8" CornerRadius="12" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Grid Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,12,0,0">
+                <ScrollViewer x:Name="TranscriptScroll" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock x:Name="EmptyHint" Text="Napisz tak, jakbyś mówił. Ten komputer jest przy mózgu." Foreground="{StaticResource Muted}" FontSize="16" TextWrapping="Wrap" />
+                        <ItemsControl x:Name="Transcript" ItemsSource="{x:Bind Lines}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="8" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="local:ChatLine">
+                                    <Grid>
+                                        <StackPanel Spacing="4" MaxWidth="640" HorizontalAlignment="Left" Visibility="{x:Bind JarvisVisibility}">
+                                            <TextBlock Text="Jarvis" Style="{StaticResource Label}" />
+                                            <TextBlock Text="{x:Bind Text, Mode=OneWay}" TextWrapping="Wrap" Foreground="{StaticResource Text}" FontSize="16" IsTextSelectionEnabled="True" />
+                                        </StackPanel>
+                                        <StackPanel Spacing="4" MaxWidth="520" HorizontalAlignment="Right" Visibility="{x:Bind MineVisibility}">
+                                            <TextBlock Text="Ty" Style="{StaticResource Label}" HorizontalAlignment="Right" />
+                                            <TextBlock Text="{x:Bind Text, Mode=OneWay}" TextWrapping="Wrap" TextAlignment="Right" Foreground="{StaticResource Text}" FontSize="16" IsTextSelectionEnabled="True" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <Grid Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,12,0,0" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="Draft" PlaceholderText="Napisz do Jarvisa" KeyDown="DraftKey" IsEnabled="False" Padding="12,10" CornerRadius="12" Background="{StaticResource Panel}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line}" />
+                <Button x:Name="SendButton" Grid.Column="1" Content="Wyślij" Click="SendClick" IsEnabled="False" MinWidth="96" Background="{StaticResource Accent}" Foreground="{StaticResource Bg}" BorderThickness="0" Padding="16,8" CornerRadius="12" VerticalAlignment="Stretch" />
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="Gate" Grid.Row="2">
+            <Border MaxWidth="440" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="24">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="JARVIS" FontFamily="Consolas" FontSize="13" Foreground="{StaticResource Accent}" CharacterSpacing="160" />
+                    <TextBlock x:Name="GateHost" FontFamily="Consolas" FontSize="18" Foreground="{StaticResource Text}" />
+                    <TextBlock Text="Ten komputer łączy się sam. Kod parowania podajesz tylko raz." TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="16" />
+                    <TextBox x:Name="Code" PlaceholderText="Kod parowania" KeyDown="CodeKey" Padding="12,10" CornerRadius="12" Background="{StaticResource Bg}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line}" />
+                    <Button x:Name="PairButton" Content="Sparuj" Click="Pair" HorizontalAlignment="Left" Background="{StaticResource Accent}" Foreground="{StaticResource Bg}" BorderThickness="0" Padding="16,8" CornerRadius="12" />
+                    <TextBlock x:Name="GateHint" TextWrapping="Wrap" Foreground="{StaticResource Text}" FontSize="14" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>
