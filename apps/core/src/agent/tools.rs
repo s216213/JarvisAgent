@@ -11,13 +11,22 @@ use super::common::{ask_device, confirm, finish, say, store_assistant, vault_pat
 use super::memory::{file_note};
 use super::presence::{flush_notices, move_whole};
 
-pub(crate) async fn execute(app: &App, device_id: &str, name: &str, args: &Value) -> anyhow::Result<String> {
+pub(crate) async fn execute_step(app: &App, device_id: &str, name: &str, args: &Value) -> anyhow::Result<String> {
     run_tool_inner(app, device_id, name, args).await
+}
+
+async fn start_mission(app: &App, args: &Value) -> anyhow::Result<String> {
+    let goal = args.get("goal").and_then(|v| v.as_str()).unwrap_or("");
+    crate::mission::start(app, goal).await
 }
 
 pub(crate) async fn run_tool(app: &App, device_id: &str, name: &str, args: &Value) -> anyhow::Result<()> {
     let job = super::jobs::begin(app, name, device_id, "").await.ok();
-    let result = run_tool_inner(app, device_id, name, args).await;
+    let result = if name == "mission" {
+        start_mission(app, args).await
+    } else {
+        run_tool_inner(app, device_id, name, args).await
+    };
     if let Some(id) = job {
         let (status, detail) = match &result {
             Ok(text) if text.starts_with("Anulowane") || text.contains("jest wyłączon") => ("failed", text.clone()),
@@ -110,10 +119,6 @@ async fn run_tool_inner(app: &App, device_id: &str, name: &str, args: &Value) ->
         "simulate" => crate::simulate::run(app, args).await?,
         "evolve" => crate::evolve::run(app, args).await?,
         "status" => crate::briefing::report(app, false).await?,
-        "mission" => {
-            let goal = args.get("goal").and_then(|v| v.as_str()).unwrap_or("");
-            crate::mission::start(app, goal).await?
-        }
         _ => crate::evolve::from_unknown(app, name, args).await?,
     };
     Ok(output)

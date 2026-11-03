@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use serde_json::{json, Value};
 
-use crate::agent::{execute, say};
+use crate::agent::{execute_step, say};
 use crate::db;
 use crate::state::App;
 
@@ -88,7 +88,7 @@ async fn drive(app: App, goal: String, flag: Arc<AtomicBool>) {
             say(&app, "Pomijam ten krok.").await;
             continue;
         }
-        let result = execute(&app, "mission", &step.tool, &step.args).await;
+        let result = execute_step(&app, "mission", &step.tool, &step.args).await;
         if flag.load(Ordering::Relaxed) {
             say(&app, "Przerywam misję.").await;
             break;

@@ -13,5 +13,5 @@ pub use health::health_tick;
 pub(crate) use memory::recall;
 pub use presence::{ingest_clipboard, ingest_notice, update_presence};
 pub use tools::{glance_saved, save_photo, tick_schedules, tool_result};
-pub(crate) use tools::{execute, weather_line};
+pub(crate) use tools::{execute_step, weather_line};
 pub(crate) use jobs::{begin as begin_job, close as close_job};
