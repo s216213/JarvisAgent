@@ -155,6 +155,7 @@ impl Router {
             anyhow::bail!("brak modelu");
         }
         let mut last = String::from("brak modelu");
+        let mut limited = false;
         for model in models.into_iter().take(4) {
             match self.complete_with(provider, &model, system, user).await {
                 Ok(text) => {
@@ -163,17 +164,24 @@ impl Router {
                 }
                 Err(err) => {
                     let msg = err.to_string();
-                    if msg.contains("429") {
-                        anyhow::bail!("429");
-                    }
                     tracing::warn!(provider, %model, error = %short(&msg), "model odrzucony");
+                    if msg.contains("429") {
+                        self.demote(provider, &model).await;
+                        limited = true;
+                        last = format!("{model}: 429");
+                        continue;
+                    }
                     last = format!("{model}: {}", short(&msg));
                     if !msg.starts_with("pomiń ") {
                         anyhow::bail!(last);
                     }
+                    self.demote(provider, &model).await;
                     last = msg.trim_start_matches("pomiń ").to_string();
                 }
             }
+        }
+        if limited {
+            anyhow::bail!("429");
         }
         anyhow::bail!(last)
     }
@@ -339,11 +347,23 @@ impl Router {
     }
 
     async fn promote(&self, provider: &str, model: &str) {
+        self.move_model(provider, model, true).await;
+    }
+
+    async fn demote(&self, provider: &str, model: &str) {
+        self.move_model(provider, model, false).await;
+    }
+
+    async fn move_model(&self, provider: &str, model: &str, front: bool) {
         let mut cache = self.catalog.lock().await;
         if let Some((_, models)) = cache.get_mut(provider) {
             if let Some(pos) = models.iter().position(|item| item == model) {
                 let chosen = models.remove(pos);
-                models.insert(0, chosen);
+                if front {
+                    models.insert(0, chosen);
+                } else {
+                    models.push(chosen);
+                }
             }
         }
     }
@@ -486,7 +506,9 @@ fn rank_models(value: &Value) -> Vec<String> {
     listed.sort_by(|a, b| {
         b.created
             .cmp(&a.created)
+            .then_with(|| family(&b.id).cmp(&family(&a.id)))
             .then_with(|| version_parts(&b.id).cmp(&version_parts(&a.id)))
+            .then_with(|| flavor(&b.id).cmp(&flavor(&a.id)))
             .then_with(|| a.id.cmp(&b.id))
     });
     listed.into_iter().map(|item| item.id).collect()
@@ -527,6 +549,7 @@ fn is_chat_model(item: &Value, id: &str) -> bool {
     const SKIP: &[&str] = &[
         "embed", "whisper", "tts", "transcrib", "moderation", "imagen", "veo", "aqa", "rerank",
         "guard", "clip", "audio", "speech", "lyria", "native-audio", "-image", "image-", "live",
+        "deep-research", "antigravity", "robotics", "computer-use", "customtools", "nano-banana",
     ];
     !SKIP.iter().any(|part| id.contains(part))
 }
@@ -539,13 +562,38 @@ fn version_parts(id: &str) -> Vec<u32> {
             let digit = u32::from(byte - b'0');
             current = Some(current.unwrap_or(0u32).saturating_mul(10).saturating_add(digit));
         } else if let Some(number) = current.take() {
+            if number < 1900 {
+                parts.push(number);
+            }
+        }
+    }
+    if let Some(number) = current.take() {
+        if number < 1900 {
             parts.push(number);
         }
     }
-    if let Some(number) = current {
-        parts.push(number);
-    }
     parts
+}
+
+fn family(id: &str) -> u8 {
+    let id = id.to_ascii_lowercase();
+    if id.starts_with("gemini") || id.starts_with("gemma") || id.contains("/gemini") || id.contains("/gemma")
+    {
+        1
+    } else {
+        0
+    }
+}
+
+fn flavor(id: &str) -> u8 {
+    let id = id.to_ascii_lowercase();
+    if id.contains("flash") || id.contains("lite") {
+        2
+    } else if id.contains("pro") {
+        1
+    } else {
+        0
+    }
 }
 
 fn skippable(status: u16, body: &str) -> bool {
@@ -553,7 +601,7 @@ fn skippable(status: u16, body: &str) -> bool {
         || body.contains("NOT_FOUND")
         || body.contains("no longer available")
         || body.contains("does not exist");
-    matches!(status, 402 | 404 | 408 | 409 | 410 | 503 | 529)
+    matches!(status, 400 | 402 | 404 | 408 | 409 | 410 | 500 | 502 | 503 | 529)
         || (status == 400 && about_model)
         || body.contains("UNAVAILABLE")
         || body.contains("model_not_found")
@@ -583,6 +631,21 @@ mod tests {
         assert_eq!(ranked[0], "gemini-3.8-flash");
         assert_eq!(ranked[1], "gemini-3.8-pro");
         assert!(!ranked.iter().any(|id| id.contains("embed")));
+    }
+
+    #[test]
+    fn research_preview_does_not_outrank_gemini() {
+        let value = json!({
+            "models": [
+                {"name": "models/deep-research-pro-preview-12-2025", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-3.8-flash", "supportedGenerationMethods": ["generateContent"]},
+                {"name": "models/gemini-4-argon", "supportedGenerationMethods": ["generateContent"]}
+            ]
+        });
+        let ranked = rank_models(&value);
+        assert_eq!(ranked[0], "gemini-4-argon");
+        assert_eq!(ranked[1], "gemini-3.8-flash");
+        assert!(!ranked.iter().any(|id| id.contains("research")));
     }
 
     #[test]
