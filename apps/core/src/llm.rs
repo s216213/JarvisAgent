@@ -46,7 +46,7 @@ impl Router {
             ("cohere", "COHERE_API_KEY"),
         ]
         .into_iter()
-        .map(|(name, key)| json!({"name": name, "set": std::env::var(key).is_ok()}))
+        .map(|(name, key)| json!({"name": name, "set": secret(key).is_ok()}))
         .collect()
     }
 
@@ -91,7 +91,7 @@ impl Router {
     }
 
     pub async fn complete_vision(&self, prompt: &str, image_b64: &str, mime: &str) -> anyhow::Result<String> {
-        let key = std::env::var("GEMINI_API_KEY").context("brak klucza GEMINI_API_KEY")?;
+        let key = secret("GEMINI_API_KEY")?;
         let model = std::env::var("GEMINI_MODEL").unwrap_or_else(|_| "gemini-2.5-flash".into());
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
@@ -123,29 +123,29 @@ impl Router {
         let (url, key, model) = match name {
             "groq" => (
                 "https://api.groq.com/openai/v1/chat/completions".to_string(),
-                std::env::var("GROQ_API_KEY").context("brak klucza")?,
+                secret("GROQ_API_KEY")?,
                 std::env::var("GROQ_MODEL").unwrap_or_else(|_| "llama-3.3-70b-versatile".into()),
             ),
             "openrouter" => (
                 "https://openrouter.ai/api/v1/chat/completions".to_string(),
-                std::env::var("OPENROUTER_API_KEY").context("brak klucza")?,
+                secret("OPENROUTER_API_KEY")?,
                 std::env::var("OPENROUTER_MODEL")
                     .unwrap_or_else(|_| "openrouter/free".into()),
             ),
             "mistral" => (
                 "https://api.mistral.ai/v1/chat/completions".to_string(),
-                std::env::var("MISTRAL_API_KEY").context("brak klucza")?,
+                secret("MISTRAL_API_KEY")?,
                 std::env::var("MISTRAL_MODEL")
                     .unwrap_or_else(|_| "mistral-small-latest".into()),
             ),
             "zai" => (
                 "https://api.z.ai/api/paas/v4/chat/completions".to_string(),
-                std::env::var("ZAI_API_KEY").context("brak klucza")?,
+                secret("ZAI_API_KEY")?,
                 std::env::var("ZAI_MODEL").unwrap_or_else(|_| "glm-4.5-flash".into()),
             ),
             "sambanova" => (
                 "https://api.sambanova.ai/v1/chat/completions".to_string(),
-                std::env::var("SAMBANOVA_API_KEY").context("brak klucza")?,
+                secret("SAMBANOVA_API_KEY")?,
                 std::env::var("SAMBANOVA_MODEL")
                     .unwrap_or_else(|_| "Meta-Llama-3.3-70B-Instruct".into()),
             ),
@@ -183,7 +183,7 @@ impl Router {
     }
 
     async fn gemini(&self, system: &str, user: &str) -> anyhow::Result<String> {
-        let key = std::env::var("GEMINI_API_KEY").context("brak klucza")?;
+        let key = secret("GEMINI_API_KEY")?;
         let model = std::env::var("GEMINI_MODEL").unwrap_or_else(|_| "gemini-2.5-flash".into());
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
@@ -217,8 +217,8 @@ impl Router {
     }
 
     async fn cloudflare(&self, system: &str, user: &str) -> anyhow::Result<String> {
-        let token = std::env::var("CLOUDFLARE_API_TOKEN").context("brak klucza")?;
-        let account = std::env::var("CLOUDFLARE_ACCOUNT_ID").context("brak klucza")?;
+        let token = secret("CLOUDFLARE_API_TOKEN")?;
+        let account = secret("CLOUDFLARE_ACCOUNT_ID")?;
         let model = std::env::var("CLOUDFLARE_MODEL")
             .unwrap_or_else(|_| "@cf/meta/llama-3.1-8b-instruct".into());
         let url = format!("https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}");
@@ -244,7 +244,7 @@ impl Router {
     }
 
     async fn cohere(&self, system: &str, user: &str) -> anyhow::Result<String> {
-        let key = std::env::var("COHERE_API_KEY").context("brak klucza")?;
+        let key = secret("COHERE_API_KEY")?;
         let model = std::env::var("COHERE_MODEL").unwrap_or_else(|_| "command-r".into());
         let response = self
             .http
@@ -293,6 +293,14 @@ impl Router {
             Ok(lines.join("\n"))
         }
     }
+}
+
+fn secret(name: &str) -> anyhow::Result<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .context("brak klucza")
 }
 
 fn urlencoding(text: &str) -> String {

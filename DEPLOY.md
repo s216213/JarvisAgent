@@ -102,7 +102,7 @@ pnpm install
 pnpm dev
 ```
 
-`.env` w katalogu głównym steruje rdzeniem przy `cargo run`. Poza Dockerem wartości z tego pliku wygrywają z `data/jarvis.env`, więc panel ich nie utrwala między restartami. Puste linie i komentarze są pomijane. Plik nie wchodzi do gita. `apps/web/.env` ustawia `VITE_API_URL` dla Vite. Origin zostaje `http://localhost:5173`, a `JARVIS_COOKIE_SECURE` wyłączone.
+`.env` w katalogu głównym steruje rdzeniem przy `cargo run` i, na OCI, przy `docker compose`: klucze providerów z tego pliku wchodzą do kontenera. Pusta wartość jest pomijana. Poza Dockerem wartości z tego pliku wygrywają z `data/jarvis.env`, więc panel ich nie utrwala między restartami. Puste linie i komentarze są pomijane. Plik nie wchodzi do gita. `apps/web/.env` ustawia `VITE_API_URL` dla Vite. Origin zostaje `http://localhost:5173`, a `JARVIS_COOKIE_SECURE` wyłączone.
 
 ## WinUI
 
